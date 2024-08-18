@@ -5,4 +5,4 @@ const (
 	PageNumSize    = 8
 )
 
-type Pgnum uint64
+type Pgnum int64

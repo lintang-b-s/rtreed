@@ -3,8 +3,10 @@ package index
 import (
 	"bytes"
 	"container/heap"
+	"errors"
 	"math"
 	"sort"
+	"sync"
 
 	"github.com/lintang-b-s/lbs/types"
 )
@@ -24,6 +26,7 @@ type Rtree struct {
 	root       types.Pgnum
 	size       int32
 	height     int
+	latch      sync.RWMutex
 }
 
 func NewTree(dim, min, max int, root types.Pgnum, mHeight int, mSize int32) *Rtree {
@@ -75,13 +78,16 @@ func (s *SpatialData) Bounds() Rect {
 
 func (tree *Rtree) Insert(obj SpatialData) {
 	e := Entry{obj.Bounds(), 0, obj}
+	tree.latch.Lock()
 	tree.insert(e, 1)
+
 	tree.size++
-	
 	tree.Dal.UpdateMetaHeightSize(tree.height, tree.size)
+	tree.latch.Unlock()
 }
 
 func (tree *Rtree) insert(e Entry, level int) {
+
 	root, err := tree.Dal.GetNode(tree.root)
 	if err != nil {
 		panic(err)
@@ -92,6 +98,7 @@ func (tree *Rtree) insert(e Entry, level int) {
 	} else {
 		leaf = tree.chooseLeaf(root, e)
 	}
+
 	leaf.entries = append(leaf.entries, e)
 
 	eChild, _ := tree.Dal.GetNode(e.child)
@@ -115,6 +122,7 @@ func (tree *Rtree) insert(e Entry, level int) {
 	if ll != nil && l.PageNum == root.PageNum {
 		oldRoot := l
 		tree.height++
+
 		ll, err = tree.Dal.WriteNode(ll)
 		if err != nil {
 			panic(err)
@@ -139,15 +147,14 @@ func (tree *Rtree) insert(e Entry, level int) {
 		tree.Dal.WriteNode(ll)
 		tree.Dal.WriteNode(oldRoot)
 	}
-
 }
 
 func chooseLeastEnlargement(entries []Entry, e Entry) types.Pgnum {
 	rectAreaDiff := math.MaxFloat64
 	var leastEnlEntry Entry
 	for _, en := range entries {
-		bb := createRectangle(en.rect, e.rect)
-		currDiff := bb.Area() - en.rect.Area()
+		rect := createRectangle(en.rect, e.rect)
+		currDiff := rect.Area() - en.rect.Area()
 		if currDiff < rectAreaDiff || (currDiff == rectAreaDiff && en.rect.Area() < leastEnlEntry.rect.Area()) {
 			rectAreaDiff = currDiff
 			leastEnlEntry = en
@@ -174,6 +181,7 @@ func (tree *Rtree) chooseNode(n *Node, e Entry, level int) *Node {
 }
 
 func (tree *Rtree) chooseLeaf(n *Node, e Entry) *Node {
+
 	if n.leaf {
 		return n
 	}
@@ -183,6 +191,7 @@ func (tree *Rtree) chooseLeaf(n *Node, e Entry) *Node {
 	if chosenChild == 0 {
 		return n
 	}
+
 	child, err := tree.Dal.GetNode(chosenChild)
 	if err != nil {
 		panic(err)
@@ -200,20 +209,23 @@ func (tree *Rtree) adjustTree(l, ll *Node) (*Node, *Node) {
 		if ll != nil {
 			tree.Dal.WriteNode(ll)
 		}
-
 		return l, ll
 	}
 
-	en, _ := l.getNFromParentEntry()
+	en, idx := l.getNFromParentEntry()
 	prevRect := en.rect
 	en.rect = createNodeRectangle(*l)
 
 	nParent, err := tree.Dal.GetNode(l.parent)
+	nParent.entries[idx] = *en
+
 	if err != nil {
 		panic(err)
 	}
 	if ll == nil {
 		tree.Dal.WriteNode(l)
+		tree.Dal.WriteNode(nParent)
+
 		if en.rect.Equal(prevRect) {
 			return root, nil
 		}
@@ -226,6 +238,7 @@ func (tree *Rtree) adjustTree(l, ll *Node) (*Node, *Node) {
 	tree.Dal.WriteNode(nParent)
 	tree.Dal.WriteNode(l)
 	tree.Dal.WriteNode(ll)
+
 	if len(nParent.entries) < tree.MaxEntries {
 		return tree.adjustTree(nParent, nil)
 	}
@@ -299,6 +312,7 @@ func (n *Node) splitNode(minGroupSize int) (*Node, *Node) {
 	}
 
 	groupTwo, err := n.Dal.WriteNode(groupTwo)
+
 	if err != nil {
 		panic(err)
 	}
@@ -357,7 +371,6 @@ func (n *Node) splitNode(minGroupSize int) (*Node, *Node) {
 		}
 
 		otherEntries = append(otherEntries[:next], otherEntries[next+1:]...)
-
 	}
 
 	return groupOne, groupTwo
@@ -511,20 +524,24 @@ func (tree *Rtree) condenseTree(n *Node) {
 	}
 }
 
-func (tree *Rtree) NearestNeighbors2(k int, p Point) []SpatialData {
+func (tree *Rtree) NearestNeighbors(k int, p Point) []SpatialData {
+	tree.latch.RLock()
+
 	nearestListsPQ := priorityQueue[SpatialData]{}
+
 	root, err := tree.Dal.GetNode(tree.root)
 	if err != nil {
 		panic(err)
 	}
 
-	tree.nearestNeighbors2(k, p, root, &nearestListsPQ)
+	tree.nearestNeighbors(k, p, root, &nearestListsPQ)
 
 	nearestLists := []SpatialData{}
 	for nearestListsPQ.Len() > 0 {
 		nearestLists = append(nearestLists, heap.Pop(&nearestListsPQ).(*priorityQueueNode[SpatialData]).item)
 	}
 	nearestLists = ReverseG(nearestLists)
+	tree.latch.RUnlock()
 	return nearestLists
 }
 
@@ -582,7 +599,7 @@ func insertToNearestLists(nearestLists *priorityQueue[SpatialData], obj SpatialD
 	}
 }
 
-func (tree *Rtree) nearestNeighbors2(k int, q Point, n *Node, nearestLists *priorityQueue[SpatialData]) {
+func (tree *Rtree) nearestNeighbors(k int, q Point, n *Node, nearestLists *priorityQueue[SpatialData]) {
 	var nearestListMaxDist float64 = math.Inf(1)
 
 	pq := *nearestLists
@@ -609,11 +626,20 @@ func (tree *Rtree) nearestNeighbors2(k int, q Point, n *Node, nearestLists *prio
 			eChild, _ := n.Dal.GetNode(e.child)
 
 			if dists[i] < nearestListMaxDist {
-				tree.nearestNeighbors2(k, q, eChild, nearestLists)
+				tree.nearestNeighbors(k, q, eChild, nearestLists)
 			} else {
 				break // activeBranchList udah sorted
 			}
 		}
 
 	}
+}
+
+func (tree *Rtree) Update(obj SpatialData, newObj SpatialData) error {
+	found := tree.Delete(obj)
+	if !found {
+		return errors.New("object not found")
+	}
+	tree.Insert(newObj)
+	return nil
 }

@@ -2,6 +2,7 @@ package page
 
 import (
 	"encoding/binary"
+	"sync"
 
 	"github.com/lintang-b-s/lbs/types"
 )
@@ -11,6 +12,7 @@ const metaPage = 0
 type freelist struct {
 	maxPage       types.Pgnum
 	releasedPages []types.Pgnum
+	latch         sync.Mutex
 }
 
 func newFreelist() *freelist {
@@ -27,8 +29,12 @@ func (fr *freelist) getNextPage() types.Pgnum {
 		fr.releasedPages = fr.releasedPages[:len(fr.releasedPages)-1]
 		return pageID
 	}
+	fr.latch.Lock()
 	fr.maxPage += 1
-	return fr.maxPage
+	maxPage := fr.maxPage
+	fr.latch.Unlock()
+
+	return maxPage
 }
 
 func (fr *freelist) releasePage(page types.Pgnum) {
