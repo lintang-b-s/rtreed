@@ -1,8 +1,10 @@
 package index
 
 import (
+	"github.com/lintang-b-s/lbs/lib/buffer"
 	"github.com/lintang-b-s/lbs/lib/disk"
 	"github.com/lintang-b-s/lbs/lib/log"
+	"github.com/lintang-b-s/lbs/lib/tree"
 )
 
 type DiskManagerI interface {
@@ -23,8 +25,11 @@ type LogManagerI interface {
 
 type BufferPoolManager interface {
 	UnpinPage(blockID disk.BlockID, isDirty bool) bool
-	FetchPage(blockID disk.BlockID) (*disk.Page, error)
+	FetchPage(blockID disk.BlockID) (*buffer.Buffer, error)
 	FlushAll() error
 	Close()
-	NewPage(blockID *disk.BlockID) (*disk.Page, error)
+	NewPage(blockID *disk.BlockID) (*buffer.Buffer, error)
+	GetPage(frameId int) (*tree.Node, bool)
+	SetNextBlockId(nextBlockID int)
+	GetNextBlockId() int
 }

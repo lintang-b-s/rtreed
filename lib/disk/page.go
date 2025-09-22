@@ -95,6 +95,7 @@ func (p *Page) Contents() []byte {
 }
 
 func (p *Page) SerializeNode(node *tree.Node) {
+
 	isLeaf := node.IsLeaf()
 	p.PutBool(0, isLeaf)
 	p.PutUint16(1, uint16(node.GetEntriesSize()))
@@ -104,7 +105,7 @@ func (p *Page) SerializeNode(node *tree.Node) {
 
 	leftPos := int32(21)
 	rightPos := len(p.bb.Bytes()) - 1
-	node.ForEntries(func(entry tree.Entry) {
+	node.ForEntries(func(entry *tree.Entry) {
 
 		childNode := entry.GetChild()
 
@@ -160,7 +161,10 @@ func (p *Page) DeserializeNode() *tree.Node {
 	node.SetParent(types.BlockNum(p.GetUint64(5)))
 	node.SetPageNum(types.BlockNum(p.GetUint64(13)))
 
-	entries := make([]tree.Entry, entriesCount)
+	entries := make([]*tree.Entry, entriesCount)
+	for i := 0; i < entriesCount; i++ {
+		entries[i] = &tree.Entry{}
+	}
 
 	leftPos := int32(21)
 	for i := 0; i < entriesCount; i++ {
@@ -281,6 +285,9 @@ func (p *Page) SerializeMetadata(m *meta.Meta) {
 
 	p.PutInt(leftPos, int32(m.GetSize()))
 	leftPos += 4
+
+	p.PutInt(leftPos, int32(m.GetNextBlockId()))
+	leftPos += 4
 }
 
 func (p *Page) DeserializeMetadata() *meta.Meta {
@@ -298,6 +305,9 @@ func (p *Page) DeserializeMetadata() *meta.Meta {
 
 	m.SetSize(int32(p.GetInt(leftPos)))
 	leftPos += 4
+	
+	m.SetNextBlockId(int(p.GetInt(leftPos)))
+
 	return m
 }
 

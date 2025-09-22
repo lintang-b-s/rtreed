@@ -27,7 +27,7 @@ func TestBufferManager(t *testing.T) {
 	}
 	t.Run("success pin unpin buffer pool manager", func(t *testing.T) {
 
-		bm := NewBufferPoolManager(5, dm, lm)
+		bm := NewBufferPoolManager(5, dm, lm, 0)
 		buffers := make([]*Buffer, 10)
 		blocks := make([]disk.BlockID, 10)
 		for i := 0; i < 10; i++ {
@@ -49,7 +49,7 @@ func TestBufferManager(t *testing.T) {
 
 	t.Run("failed pin buffer pool manager because all buffer is pinned", func(t *testing.T) {
 
-		bm := NewBufferPoolManager(5, dm, lm)
+		bm := NewBufferPoolManager(5, dm, lm, 0)
 
 		buffers := make([]*Buffer, 10)
 		blocks := make([]disk.BlockID, 10)
@@ -85,7 +85,7 @@ func TestBufferManager(t *testing.T) {
 			blocks[i] = newBlockID
 		}
 
-		bm := NewBufferPoolManager(10, dm, lm)
+		bm := NewBufferPoolManager(10, dm, lm, 0)
 
 		// fetch all pages dan append ke pages
 		for i := 0; i < 10000; i++ {
@@ -96,7 +96,7 @@ func TestBufferManager(t *testing.T) {
 			if err != nil {
 				t.Errorf("Error pinning page: %s", err)
 			}
-			pages[i] = bf
+			pages[i] = bf.contents
 		}
 
 		for idx, page := range pages {

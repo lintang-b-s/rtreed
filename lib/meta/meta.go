@@ -13,6 +13,7 @@ type Meta struct {
 	Height       int
 	Size         int32
 	freelistPage types.BlockNum
+	nextBlockId int 
 }
 
 func (m *Meta) GetFreelistPage() types.BlockNum {
@@ -45,6 +46,14 @@ func (m *Meta) GetSize() int32 {
 
 func (m *Meta) SetSize(s int32) {
 	m.Size = s
+}
+
+func (m *Meta) GetNextBlockId() int {
+	return m.nextBlockId
+}
+
+func (m *Meta) SetNextBlockId(id int){
+	m.nextBlockId = id
 }
 
 func NewEmptyMeta() *Meta {

@@ -2,6 +2,7 @@ package index
 
 import (
 	"github.com/lintang-b-s/lbs/lib"
+	"github.com/lintang-b-s/lbs/lib/buffer"
 	"github.com/lintang-b-s/lbs/lib/disk"
 	"github.com/lintang-b-s/lbs/lib/meta"
 	"github.com/lintang-b-s/lbs/lib/tree"
@@ -9,54 +10,53 @@ import (
 )
 
 func (rt *Rtreed) getNode(pageNum types.BlockNum) (*tree.Node, error) {
-	page, err := rt.bufferPoolManager.FetchPage(disk.NewBlockID(lib.PAGE_FILE_NAME, int(pageNum)))
+	buffer, err := rt.bufferPoolManager.FetchPage(disk.NewBlockID(lib.PAGE_FILE_NAME, int(pageNum)))
 
 	if err != nil {
 		return nil, err
 	}
 
-	node := page.DeserializeNode()
+	node := buffer.DeserializeNode()
 
 	return node, nil
 }
 
-func (rt *Rtreed) getNodeAndPage(pageNum types.BlockNum) (*tree.Node, *disk.Page, error) {
-	page, err := rt.bufferPoolManager.FetchPage(disk.NewBlockID(lib.PAGE_FILE_NAME, int(pageNum)))
+func (rt *Rtreed) getNodeAndPage(pageNum types.BlockNum) (*tree.Node, *buffer.Buffer, error) {
+	buffer, err := rt.bufferPoolManager.FetchPage(disk.NewBlockID(lib.PAGE_FILE_NAME, int(pageNum)))
 
 	if err != nil {
 		return nil, nil, err
 	}
 
-	node := page.DeserializeNode()
+	node := buffer.DeserializeNode()
 
-	return node, page, nil
+	return node, buffer, nil
 }
 
 func (rt *Rtreed) getNodeByte(pageNum types.BlockNum) (*disk.NodeByte, error) {
-	page, err := rt.bufferPoolManager.FetchPage(disk.NewBlockID(lib.PAGE_FILE_NAME, int(pageNum)))
+	buffer, err := rt.bufferPoolManager.FetchPage(disk.NewBlockID(lib.PAGE_FILE_NAME, int(pageNum)))
 
 	if err != nil {
 		return nil, err
 	}
 
-	return page.GetNodePage(), nil
+	return buffer.GetNodePage(), nil
 }
 
 func (rt *Rtreed) writeRootNode(n *tree.Node) (*tree.Node, error) {
 	var (
-		page    *disk.Page
 		err     error
 		blockId disk.BlockID
 	)
-	page, err = rt.bufferPoolManager.NewPage(&blockId)
+	buffer, err := rt.bufferPoolManager.NewPage(&blockId)
 	if err != nil {
 		return nil, err
 	}
 	blockId.SetFileName(lib.PAGE_FILE_NAME)
 
 	n.SetPageNum(types.BlockNum(blockId.GetBlockNum()))
-	page.SerializeNode(n)
-	err = rt.diskManager.Write(blockId, page)
+	buffer.SerializeNode(n)
+	err = rt.diskManager.Write(blockId, buffer.GetContents())
 	if err != nil {
 		return nil, err
 	}
@@ -65,66 +65,62 @@ func (rt *Rtreed) writeRootNode(n *tree.Node) (*tree.Node, error) {
 
 func (rt *Rtreed) writeNode(n *tree.Node) (*tree.Node, error) {
 	var (
-		page    *disk.Page
-		err     error
 		blockId disk.BlockID
 	)
 	if n.GetPageNum() == lib.NEW_PAGE_NUM {
-		page, err = rt.bufferPoolManager.NewPage(&blockId)
+		buffer, err := rt.bufferPoolManager.NewPage(&blockId)
 		if err != nil {
 			return nil, err
 		}
 		blockId.SetFileName(lib.PAGE_FILE_NAME)
 
 		n.SetPageNum(types.BlockNum(blockId.GetBlockNum()))
-		page.SerializeNode(n)
-		err = rt.diskManager.Write(blockId, page)
+		buffer.SerializeNode(n)
+		err = rt.diskManager.Write(blockId, buffer.GetContents())
 		if err != nil {
 			return nil, err
 		}
 		return n, nil
 	} else {
 		blockId = disk.NewBlockID(lib.PAGE_FILE_NAME, int(n.GetPageNum()))
-		page, err = rt.bufferPoolManager.FetchPage(blockId)
+		buffer, err := rt.bufferPoolManager.FetchPage(blockId)
 		if err != nil {
 			return nil, err
 		}
-		page.SerializeNode(n)
+		buffer.SerializeNode(n)
 
 		return n, nil
 	}
 
 }
 
-func (rt *Rtreed) writeNodeAndGetPage(n *tree.Node) (*tree.Node, *disk.Page, error) {
+func (rt *Rtreed) writeNodeAndGetPage(n *tree.Node) (*tree.Node, *buffer.Buffer, error) {
 	var (
-		page    *disk.Page
-		err     error
 		blockId disk.BlockID
 	)
 	if n.GetPageNum() == lib.NEW_PAGE_NUM {
-		page, err := rt.bufferPoolManager.NewPage(&blockId)
+		buffer, err := rt.bufferPoolManager.NewPage(&blockId)
 		if err != nil {
 			return nil, nil, err
 		}
 		blockId.SetFileName(lib.PAGE_FILE_NAME)
-
-		page.SerializeNode(n)
 		n.SetPageNum(types.BlockNum(blockId.GetBlockNum()))
-		err = rt.diskManager.Write(blockId, page)
+
+		buffer.SerializeNode(n)
+		err = rt.diskManager.Write(blockId, buffer.GetContents())
 		if err != nil {
 			return nil, nil, err
 		}
-		return n, page, nil
+		return n, buffer, nil
 	} else {
 		blockId = disk.NewBlockID(lib.PAGE_FILE_NAME, int(n.GetPageNum()))
-		page, err = rt.bufferPoolManager.FetchPage(blockId)
+		buffer, err := rt.bufferPoolManager.FetchPage(blockId)
 		if err != nil {
 			return nil, nil, err
 		}
-		page.SerializeNode(n)
+		buffer.SerializeNode(n)
 
-		return n, page, nil
+		return n, buffer, nil
 	}
 
 }
@@ -140,12 +136,12 @@ func (rt *Rtreed) writeMeta() error {
 
 func (rt *Rtreed) readMeta() (*meta.Meta, error) {
 	blockId := disk.NewBlockID(lib.PAGE_FILE_NAME, metaPageNum)
-	page, err := rt.bufferPoolManager.FetchPage(blockId)
+	buffer, err := rt.bufferPoolManager.FetchPage(blockId)
 	if err != nil {
 		return nil, err
 	}
 
-	metadata := page.DeserializeMetadata()
+	metadata := buffer.DeserializeMetadata()
 	return metadata, nil
 }
 func (rt *Rtreed) updateMetaHeightSeize(height int, size int32) {
@@ -157,7 +153,8 @@ func (d *Rtreed) upateMetaRoot(rootPageNum types.BlockNum) {
 	d.metadata.SetRoot(rootPageNum)
 }
 func (d *Rtreed) Close() error {
-
+	blockId := d.bufferPoolManager.GetNextBlockId()
+	d.metadata.SetNextBlockId(blockId)
 	err := d.writeMeta()
 	if err != nil {
 		return err

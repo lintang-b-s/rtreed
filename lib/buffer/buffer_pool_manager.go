@@ -6,6 +6,7 @@ import (
 	"github.com/lintang-b-s/lbs/lib"
 	"github.com/lintang-b-s/lbs/lib/concurrent"
 	"github.com/lintang-b-s/lbs/lib/disk"
+	"github.com/lintang-b-s/lbs/lib/tree"
 )
 
 // https://15445.courses.cs.cmu.edu/spring2023/slides/06-bufferpool.pdf
@@ -17,13 +18,13 @@ type BufferPoolManager struct {
 	bufferTable  map[disk.BlockID]int // mapping antara page blockID dengan frameID/buffer index. {blockID: frameID}
 	freeList     []int                // list frame yang tidak hold any page data.
 	replacer     *LRUReplacer         // LRU replacer buat evict least recently used page dari buffer pool.
-	nextBlockID  int
+	nextBlockId  int
 	workerQueue  concurrent.WorkQueue
 }
 
 // NewBufferPoolManager. initialize buffer pool manager.
 func NewBufferPoolManager(numBuffers int, diskManager DiskManager,
-	logManager LogManager) *BufferPoolManager {
+	logManager LogManager, nextBlockId int) *BufferPoolManager {
 	bufferPool := make([]*Buffer, numBuffers)
 	for i := 0; i < numBuffers; i++ {
 		bufferPool[i] = NewBuffer(diskManager, logManager)
@@ -37,7 +38,7 @@ func NewBufferPoolManager(numBuffers int, diskManager DiskManager,
 	backgroundFileWriter := concurrent.NewWorkerQueue(1)
 
 	return &BufferPoolManager{bufferPool: bufferPool, numAvailable: numBuffers,
-		poolSize: numBuffers, bufferTable: make(map[disk.BlockID]int), freeList: fl, replacer: NewLRUReplacer(numBuffers), nextBlockID: 1,
+		poolSize: numBuffers, bufferTable: make(map[disk.BlockID]int), freeList: fl, replacer: NewLRUReplacer(numBuffers), nextBlockId: nextBlockId,
 		workerQueue: backgroundFileWriter}
 }
 
@@ -45,9 +46,18 @@ func (bpm *BufferPoolManager) getBufferAvailable() int {
 	return bpm.numAvailable
 }
 
+func (bpm *BufferPoolManager) SetNextBlockId(nextBlockId int) {
+	bpm.nextBlockId = nextBlockId
+}
+
+func (bpm *BufferPoolManager) GetNextBlockId() int {
+	return bpm.nextBlockId
+}
+
 // flushAll. flush semua buffer yang terkait dengan transactionNum.
 func (bpm *BufferPoolManager) FlushAll() error {
 	for _, buffer := range bpm.bufferPool {
+
 		if buffer.blockID.GetFilename() == "" {
 			// unfilled frameId / free slot in buffer pool
 			continue
@@ -105,7 +115,7 @@ func (bpm *BufferPoolManager) UnpinPage(blockID disk.BlockID, isDirty bool) bool
 FetchPage. fetch page dengan block id dari buffer pool. kalau page tidak ada di buffer pool, coba read dari disk.
 & put page di buffer pool. kalau page belum ada di buffer pool, ambil frameID dari freelist or dari  evict least recently used page dari buffer pool. dan replace buffer least recently used di buffer pool dengan page blockID.
 */
-func (bpm *BufferPoolManager) FetchPage(blockID disk.BlockID) (*disk.Page, error) {
+func (bpm *BufferPoolManager) FetchPage(blockID disk.BlockID) (*Buffer, error) {
 
 	item, ok := bpm.bufferTable[blockID]
 	var frameID int
@@ -118,7 +128,7 @@ func (bpm *BufferPoolManager) FetchPage(blockID disk.BlockID) (*disk.Page, error
 		buffer.incrementPin()     // incremeen pin +1, biar thread lain tahuu kalo buffer ini lagi dipake
 		bpm.replacer.Pin(frameID) // remove from LRU, biar gak di evict dari buffer pool
 
-		return buffer.getContents(), nil // return buffer
+		return buffer, nil // return buffer
 	}
 
 	// kalau page/buffer belum ada di buffer pool,
@@ -150,7 +160,7 @@ func (bpm *BufferPoolManager) FetchPage(blockID disk.BlockID) (*disk.Page, error
 	replacedBuffer.incrementPin()
 
 	bpm.replacer.Pin(frameID) // remove from LRU, biar gak di evict dari buffer pool
-	return replacedBuffer.getContents(), nil
+	return replacedBuffer, nil
 }
 
 // PinPage. pin page dengan block id & put page di buffer pool. buffer/page yang di pin tidak akan dihapus dari buffer pool.
@@ -203,7 +213,7 @@ func (bpm *BufferPoolManager) PinPage(blockID disk.BlockID) (*Buffer, error) {
 NewPage. Allocates a new page on disk. dan put new buffer/page ke buffer pool.
 ,frameID baru di ambil dari freelist or  dari evict least recently used page dari buffer pool. dan replace buffer least recently used di buffer pool dengan page blockID.
 */
-func (bpm *BufferPoolManager) NewPage(blockID *disk.BlockID) (*disk.Page, error) {
+func (bpm *BufferPoolManager) NewPage(blockID *disk.BlockID) (*Buffer, error) {
 
 	allPinned := true
 	for i := 0; i < bpm.poolSize; i++ {
@@ -242,12 +252,12 @@ func (bpm *BufferPoolManager) NewPage(blockID *disk.BlockID) (*disk.Page, error)
 	}
 
 	replacedBuffer := bpm.bufferPool[frameID]
-	if bpm.nextBlockID == lib.NEW_PAGE_NUM {
-		bpm.nextBlockID++
+	if bpm.nextBlockId == lib.NEW_PAGE_NUM {
+		bpm.nextBlockId++
 	}
 
-	*blockID = disk.NewBlockID(lib.PAGE_FILE_NAME, bpm.nextBlockID) // create new blockID
-	bpm.nextBlockID++
+	*blockID = disk.NewBlockID(lib.PAGE_FILE_NAME, bpm.nextBlockId) // create new blockID
+	bpm.nextBlockId++
 
 	bpm.bufferPool[frameID].blockID = *blockID
 	replacedBuffer.incrementPin() // incerment pin jadi 1
@@ -257,7 +267,15 @@ func (bpm *BufferPoolManager) NewPage(blockID *disk.BlockID) (*disk.Page, error)
 
 	bpm.replacer.Pin(frameID) // pin frameID biar tidak di evict dari buffer pool
 
-	return replacedBuffer.contents, nil
+	return replacedBuffer, nil
+}
+
+// for debugging only
+func (bpm *BufferPoolManager) GetPage(frameId int) (*tree.Node, bool) {
+	if frameId < 0 || frameId >= bpm.poolSize {
+		return nil, false
+	}
+	return bpm.bufferPool[frameId].getContents().DeserializeNode(), true
 }
 
 // DeletePage. Removes a page from the database, both on disk and in memory.

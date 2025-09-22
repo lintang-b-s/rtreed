@@ -8,12 +8,12 @@ import (
 type Node struct {
 	parent  types.BlockNum
 	pageNum types.BlockNum
-	entries []Entry
+	entries []*Entry
 	level   int
 	leaf    bool
 }
 
-func NewNode(entries []Entry, parent types.BlockNum, level int, leaf bool) *Node {
+func NewNode(entries []*Entry, parent types.BlockNum, level int, leaf bool) *Node {
 	return &Node{
 		entries: entries,
 		parent:  parent,
@@ -35,11 +35,11 @@ func (n *Node) SetParent(parent types.BlockNum) {
 	n.parent = parent
 }
 
-func (n *Node) SetEntries(entries []Entry) {
+func (n *Node) SetEntries(entries []*Entry) {
 	n.entries = entries
 }
 
-func (n *Node) SetEntry(idx int, e Entry) {
+func (n *Node) SetEntry(idx int, e *Entry) {
 	n.entries[idx] = e
 }
 
@@ -47,7 +47,7 @@ func (n *Node) SetPageNum(pageNum types.BlockNum) {
 	n.pageNum = pageNum
 }
 
-func (n *Node) GetEntries() []Entry {
+func (n *Node) GetEntries() []*Entry {
 	return n.entries
 }
 
@@ -59,7 +59,7 @@ func (n *Node) Level() int {
 	return n.level
 }
 
-func (n *Node) ForEntries(handle func(entry Entry)) {
+func (n *Node) ForEntries(handle func(entry *Entry)) {
 	for _, e := range n.entries {
 		handle(e)
 	}
@@ -77,11 +77,11 @@ func (n *Node) GetPageNum() types.BlockNum {
 	return n.pageNum
 }
 
-func (n *Node) AppendEntry(e Entry) {
+func (n *Node) AppendEntry(e *Entry) {
 	n.entries = append(n.entries, e)
 }
 
-func (n *Node) GetEntry(idx int) Entry {
+func (n *Node) GetEntry(idx int) *Entry {
 	return n.entries[idx]
 }
 
@@ -91,8 +91,8 @@ type Entry struct {
 	obj   SpatialData
 }
 
-func NewEntry(r Rect, c types.BlockNum, o SpatialData) Entry {
-	return Entry{
+func NewEntry(r Rect, c types.BlockNum, o SpatialData) *Entry {
+	return &Entry{
 		rect:  r,
 		child: c,
 		obj:   o,

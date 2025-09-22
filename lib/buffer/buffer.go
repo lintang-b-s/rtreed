@@ -6,6 +6,8 @@ import (
 	"github.com/lintang-b-s/lbs/lib"
 	"github.com/lintang-b-s/lbs/lib/concurrent"
 	"github.com/lintang-b-s/lbs/lib/disk"
+	"github.com/lintang-b-s/lbs/lib/meta"
+	"github.com/lintang-b-s/lbs/lib/tree"
 )
 
 type DiskManager interface {
@@ -61,8 +63,32 @@ func (buf *Buffer) isPinned() bool {
 	return buf.pins > 0
 }
 
+func (buf *Buffer) GetContents() *disk.Page {
+	return buf.contents
+}
+
+func (buf *Buffer) SerializeNode(node *tree.Node) {
+	buf.contents.SerializeNode(node)
+}
+
+func (buf *Buffer) DeserializeNode() *tree.Node {
+	return buf.contents.DeserializeNode()
+}
+
 func (buf *Buffer) getTransactionNum() int {
 	return buf.transactionNum
+}
+
+func (buf *Buffer) DeserializeMetadata() *meta.Meta {
+	return buf.contents.DeserializeMetadata()
+}
+
+func (buf *Buffer) SerializeMetadata(m *meta.Meta) {
+	buf.contents.SerializeMetadata(m)
+}
+
+func (buf *Buffer) GetNodePage() *disk.NodeByte {
+	return buf.contents.GetNodePage()
 }
 
 // assignToBlock. read block/page (blockID) ke  buffer.contents
@@ -72,14 +98,6 @@ func (buf *Buffer) assignToBlock(blockID disk.BlockID, worker concurrent.WorkQue
 			log.Printf("error flush buffer: %v", err)
 			return err
 		}
-
-		// flush in background
-		// job := func() {
-		// 	if err := buf.flush(); err != nil {
-		// 		log.Printf("error flush buffer: %v", err)
-		// 	}
-		// }
-		// worker <- job // case stale read susah didebug hahah
 	}
 
 	buf.blockID = blockID
