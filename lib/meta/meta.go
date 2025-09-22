@@ -1,7 +1,7 @@
 package meta
 
 import (
-	"github.com/lintang-b-s/lbs/types"
+	"github.com/lintang-b-s/rtreed/types"
 )
 
 const (
@@ -13,7 +13,7 @@ type Meta struct {
 	Height       int
 	Size         int32
 	freelistPage types.BlockNum
-	nextBlockId int 
+	nextBlockId  int
 }
 
 func (m *Meta) GetFreelistPage() types.BlockNum {
@@ -52,7 +52,7 @@ func (m *Meta) GetNextBlockId() int {
 	return m.nextBlockId
 }
 
-func (m *Meta) SetNextBlockId(id int){
+func (m *Meta) SetNextBlockId(id int) {
 	m.nextBlockId = id
 }
 

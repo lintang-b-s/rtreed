@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/brianvoe/gofakeit/v7"
-	"github.com/lintang-b-s/lbs/lib/index"
-	"github.com/lintang-b-s/lbs/lib/tree"
+	"github.com/lintang-b-s/rtreed/lib/index"
+	"github.com/lintang-b-s/rtreed/lib/tree"
 )
 
 func TestInsert(t *testing.T) {

@@ -1,10 +1,10 @@
 package index
 
 import (
-	"github.com/lintang-b-s/lbs/lib/buffer"
-	"github.com/lintang-b-s/lbs/lib/disk"
-	"github.com/lintang-b-s/lbs/lib/log"
-	"github.com/lintang-b-s/lbs/lib/tree"
+	"github.com/lintang-b-s/rtreed/lib/buffer"
+	"github.com/lintang-b-s/rtreed/lib/disk"
+	"github.com/lintang-b-s/rtreed/lib/log"
+	"github.com/lintang-b-s/rtreed/lib/tree"
 )
 
 type DiskManagerI interface {

@@ -1,6 +1,6 @@
 package log
 
-import "github.com/lintang-b-s/lbs/lib/disk"
+import "github.com/lintang-b-s/rtreed/lib/disk"
 
 type DiskManager interface {
 	Read(blockID disk.BlockID, page *disk.Page) error

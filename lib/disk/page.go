@@ -6,9 +6,9 @@ import (
 	"errors"
 	"math"
 
-	"github.com/lintang-b-s/lbs/lib/meta"
-	"github.com/lintang-b-s/lbs/lib/tree"
-	"github.com/lintang-b-s/lbs/types"
+	"github.com/lintang-b-s/rtreed/lib/meta"
+	"github.com/lintang-b-s/rtreed/lib/tree"
+	"github.com/lintang-b-s/rtreed/types"
 )
 
 // Page . menyimpan data satu block page di dalam memori buffer (also disimpan di disk). (berukuran blockSize)
