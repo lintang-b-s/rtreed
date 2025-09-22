@@ -3,7 +3,7 @@ package log
 import (
 	"iter"
 
-	"github.com/lintang-b-s/lbs/lib/disk"
+	"github.com/lintang-b-s/rtreed/lib/disk"
 )
 
 // LogIterator. buat iterate log record yang udah ditulis di file. iteratenya darii yang terakhir ditulis ke yang terdahulu.

@@ -3,11 +3,11 @@ package buffer
 import (
 	"log"
 
-	"github.com/lintang-b-s/lbs/lib"
-	"github.com/lintang-b-s/lbs/lib/concurrent"
-	"github.com/lintang-b-s/lbs/lib/disk"
-	"github.com/lintang-b-s/lbs/lib/meta"
-	"github.com/lintang-b-s/lbs/lib/tree"
+	"github.com/lintang-b-s/rtreed/lib"
+	"github.com/lintang-b-s/rtreed/lib/concurrent"
+	"github.com/lintang-b-s/rtreed/lib/disk"
+	"github.com/lintang-b-s/rtreed/lib/meta"
+	"github.com/lintang-b-s/rtreed/lib/tree"
 )
 
 type DiskManager interface {

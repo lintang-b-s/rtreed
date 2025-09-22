@@ -1,16 +1,16 @@
 package tree
 
 import (
-	"github.com/lintang-b-s/lbs/lib"
-	"github.com/lintang-b-s/lbs/types"
+	"github.com/lintang-b-s/rtreed/lib"
+	"github.com/lintang-b-s/rtreed/types"
 )
 
 type Node struct {
-	entries []*Entry       // max_entries * max_size_of_entry
-	parent  types.BlockNum 
-	pageNum types.BlockNum 
-	level   int            
-	leaf    bool           
+	entries []*Entry // max_entries * max_size_of_entry
+	parent  types.BlockNum
+	pageNum types.BlockNum
+	level   int
+	leaf    bool
 }
 
 func NewNode(entries []*Entry, parent types.BlockNum, level int, leaf bool) *Node {
@@ -90,6 +90,7 @@ type Entry struct {
 	rect  Rect           // 32 bytes
 	child types.BlockNum // 8 bytes
 }
+
 // var(max_obj) + 40 bytes
 
 func NewEntry(r Rect, c types.BlockNum, o SpatialData) *Entry {

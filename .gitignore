@@ -1,9 +1,9 @@
 
-rtree.db
-
 test.txt
 
 *.log
 go_rtreed_db/
 *.out
 *.test
+*.db
+lintangdb/

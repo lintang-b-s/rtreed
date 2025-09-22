@@ -3,7 +3,7 @@ package meta
 import (
 	"sync"
 
-	"github.com/lintang-b-s/lbs/types"
+	"github.com/lintang-b-s/rtreed/types"
 )
 
 const metaPage = 0

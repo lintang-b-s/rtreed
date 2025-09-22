@@ -3,10 +3,10 @@ package buffer
 import (
 	"fmt"
 
-	"github.com/lintang-b-s/lbs/lib"
-	"github.com/lintang-b-s/lbs/lib/concurrent"
-	"github.com/lintang-b-s/lbs/lib/disk"
-	"github.com/lintang-b-s/lbs/lib/tree"
+	"github.com/lintang-b-s/rtreed/lib"
+	"github.com/lintang-b-s/rtreed/lib/concurrent"
+	"github.com/lintang-b-s/rtreed/lib/disk"
+	"github.com/lintang-b-s/rtreed/lib/tree"
 )
 
 // https://15445.courses.cs.cmu.edu/spring2023/slides/06-bufferpool.pdf

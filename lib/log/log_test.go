@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/lintang-b-s/lbs/lib/disk"
+	"github.com/lintang-b-s/rtreed/lib/disk"
 	"github.com/stretchr/testify/assert"
 )
 

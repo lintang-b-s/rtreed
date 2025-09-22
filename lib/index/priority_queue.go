@@ -1,6 +1,6 @@
 package index
 
-import "github.com/lintang-b-s/lbs/lib/tree"
+import "github.com/lintang-b-s/rtreed/lib/tree"
 
 type Item interface {
 	tree.SpatialData
