@@ -416,8 +416,6 @@ func (rt *Rtreed) splitNode(nPage *buffer.Buffer, minGroupSize int, needToUnpin 
 		panic(err)
 	}
 
-	// rt.bufferPoolManager.UnpinPage(disk.NewBlockID(lib.PAGE_FILE_NAME, int(groupTwoUpdated.GetPageNum())), true)
-
 	if entryTwo.GetChild() != lib.NEW_PAGE_NUM {
 		entryTwoChild, entryTwoChildPage, err := rt.getNodeAndPage(entryTwo.GetChild())
 		if err != nil {
@@ -498,7 +496,6 @@ func (rt *Rtreed) assignEntryToGroup(e *tree.Entry, group *tree.Node, needToUnpi
 		}
 
 		*needToUnpin = append(*needToUnpin, newUnpinPage(childPageNum, true))
-		// rt.bufferPoolManager.UnpinPage(disk.NewBlockID(lib.PAGE_FILE_NAME, int(childPageNum)), true)
 
 		e.SetChild(childPageNum)
 	}
@@ -771,7 +768,7 @@ func (rt *Rtreed) SearchWithinRadius(p tree.Point, radius float64) []tree.Spatia
 	lowerLeftLat, lowerLeftLon := getDestinationPoint(p.Lat, p.Lon, 225, radius)
 
 	bound := tree.NewRectFromBounds(lowerLeftLat, lowerLeftLon, upperRightLat, upperRightLon)
-	return rt.searchWithinBound(bound)
+	return rt.searchWithinBoundStack(bound)
 }
 
 func (rt *Rtreed) searchWithinBound(bound tree.Rect) []tree.SpatialData {
@@ -794,34 +791,87 @@ func (rt *Rtreed) searchWithinBound(bound tree.Rect) []tree.SpatialData {
 func (rt *Rtreed) search(node *disk.NodeByte, bound tree.Rect,
 	results []tree.SpatialData, needToUnpin *[]unpinPage) []tree.SpatialData {
 
-	// S1. [Search subtrees.] If T is not a leaf,
-	// check each entry E to determine
-	// whether E.I Overlaps S. For all overlapping entries, invoke Search on the tree
-	// whose root node is pointed to by E.p
 	if !node.IsLeaf() {
-
-		node.ForEntries(func(e tree.Entry) {
-			if e.GetRect().Overlaps(bound) {
-				eChildNode, err := rt.getNodeByte(e.GetChild())
-				*needToUnpin = append(*needToUnpin, newUnpinPage(e.GetChild(), false))
-				if err != nil {
-					panic(err)
-				}
-				results = rt.search(eChildNode, bound, results, needToUnpin)
+		node.ForEntriesOverlaps(bound, func(child types.BlockNum) {
+			// S1. [Search subtrees.] If T is not a leaf,
+			// check each entry E to determine
+			// whether E.I Overlaps S. For all overlapping entries, invoke Search on the tree
+			// whose root node is pointed to by E.p
+			eChildNode, err := rt.getNodeByte(child)
+			*needToUnpin = append(*needToUnpin, newUnpinPage(child, false))
+			if err != nil {
+				panic(err)
 			}
-		})
+			results = rt.search(eChildNode, bound, results, needToUnpin)
+		}, nil)
 	} else {
-		node.ForEntries(func(e tree.Entry) {
-			if e.GetRect().Overlaps(bound) {
+
+		node.ForEntriesOverlaps(bound, nil, func(lat, lon float64, data []byte) {
+			// S2. [Search leaf node.] If T is a leaf, check
+			// all entries E to determine whether E.I
+			// Overlaps S. If so, E is a qualifying
+			// record
+			obj := tree.NewSpatialData(tree.NewPoint(lat, lon), data)
+			results = append(results, obj)
+		})
+	}
+
+	return results
+}
+
+func (rt *Rtreed) searchWithinBoundStack(bound tree.Rect) []tree.SpatialData {
+	results := make([]tree.SpatialData, 0, 100)
+	needToUnpin := make([]unpinPage, 0, 20)
+
+	needToUnpin = append(needToUnpin, newUnpinPage(rt.root, false))
+
+	results = rt.searchStack(bound, needToUnpin)
+
+	return results
+}
+
+func (rt *Rtreed) searchStack(bound tree.Rect, needToUnpin []unpinPage) []tree.SpatialData {
+	results := make([]tree.SpatialData, 0, 100)
+	stack := make([]types.BlockNum, 0, 16)
+	stack = append(stack, rt.root)
+	fetchPageCount := 0
+
+	for len(stack) > 0 {
+		nPageNum := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+
+		node, err := rt.getNodeByte(nPageNum)
+		if err != nil {
+			panic(err)
+		}
+		fetchPageCount++
+		needToUnpin = append(needToUnpin, newUnpinPage(nPageNum, false))
+
+		if !node.IsLeaf() {
+			node.ForEntriesOverlaps(bound, func(child types.BlockNum) {
+				// S1. [Search subtrees.] If T is not a leaf,
+				// check each entry E to determine
+				// whether E.I Overlaps S. For all overlapping entries, invoke Search on the tree
+				// whose root node is pointed to by E.p
+				stack = append(stack, child)
+			}, nil)
+		} else {
+
+			node.ForEntriesOverlaps(bound, nil, func(lat, lon float64, data []byte) {
 				// S2. [Search leaf node.] If T is a leaf, check
 				// all entries E to determine whether E.I
 				// Overlaps S. If so, E is a qualifying
 				// record
-				eObj := e.GetObject()
-				results = append(results, eObj)
-			}
-		})
+				obj := tree.NewSpatialData(tree.NewPoint(lat, lon), data)
+				results = append(results, obj)
+			})
+		}
 	}
 
+	for _, p := range needToUnpin {
+		blockId := disk.NewBlockID(lib.PAGE_FILE_NAME, int(p.getPageNum()))
+		rt.bufferPoolManager.UnpinPage(blockId, p.getIsDirty())
+	}
+	_ = fetchPageCount
 	return results
 }

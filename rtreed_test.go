@@ -25,7 +25,7 @@ func BenchmarkSearch(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		// random lat lon
 
-		results := rtg.SearchWithinRadius(point, 0.25) // 25 meter radius
+		results := rtg.SearchWithinRadius(point, 0.03) // 30 meter radius
 		if len(results) != 0 {
 			_ = results
 		}

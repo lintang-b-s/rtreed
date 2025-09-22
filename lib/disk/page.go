@@ -272,6 +272,52 @@ func (nb *NodeByte) ForEntries(f func(entry tree.Entry)) {
 	}
 }
 
+func (nb *NodeByte) ForEntriesOverlaps(bound tree.Rect, onInternal func(child types.BlockNum),
+	onLeaf func(lat, lon float64, data []byte)) {
+
+	entriesCount := int(GetUint16(1, nb.buf))
+
+	leftPos := int32(21)
+	for i := 0; i < entriesCount; i++ {
+
+		var entry tree.Entry
+		childPageNum := types.BlockNum(GetUint64(leftPos, nb.buf))
+		leftPos += types.BlockNumSize
+		entry.SetChild(childPageNum)
+
+		offset := GetUint16(leftPos, nb.buf)
+		leftPos += 2
+		locLon := math.Float64frombits(GetUint64(int32(offset), nb.buf))
+		offset += 8
+		locLat := math.Float64frombits(GetUint64(int32(offset), nb.buf))
+		offset += 8
+		rrect := &tree.Rect{}
+		tLat := math.Float64frombits(GetUint64(int32(offset), nb.buf))
+		offset += 8
+		SLat := math.Float64frombits(GetUint64(int32(offset), nb.buf))
+		offset += 8
+		tLon := math.Float64frombits(GetUint64(int32(offset), nb.buf))
+		offset += 8
+		sLon := math.Float64frombits(GetUint64(int32(offset), nb.buf))
+		offset += 8
+
+		rrect.SetSLat(SLat)
+		rrect.SetSLon(sLon)
+		rrect.SetTLat(tLat)
+		rrect.SetTLon(tLon)
+
+		if !rrect.Overlaps(bound) {
+			continue
+		}
+
+		if nb.IsLeaf() {
+			onLeaf(locLat, locLon, []byte{})
+		} else {
+			onInternal(childPageNum)
+		}
+	}
+}
+
 func (p *Page) SerializeMetadata(m *meta.Meta) {
 	leftPos := int32(0)
 	p.PutUint64(leftPos, uint64(m.GetRoot()))
@@ -305,7 +351,7 @@ func (p *Page) DeserializeMetadata() *meta.Meta {
 
 	m.SetSize(int32(p.GetInt(leftPos)))
 	leftPos += 4
-	
+
 	m.SetNextBlockId(int(p.GetInt(leftPos)))
 
 	return m
