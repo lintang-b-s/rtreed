@@ -84,12 +84,13 @@ func BenchmarkSearch(b *testing.B) {
 		randomLat, _ := faker.LatitudeInRange(-7.818711242232534, -7.767187043571421)
 		randomLon, _ := faker.LongitudeInRange(110.32382482774563, 110.42872530361015)
 		point := tree.NewPoint(randomLat, randomLon)
-		results := rt.StRtree.SearchWithinRadius(point, 2.0)
+		results := rt.StRtree.SearchWithinRadius(point, 0.04) // 40 meter radius
 		if len(results) != 0 {
 			_ = results
 		}
 	}
 
 	b.StopTimer()
-
+	throughput := float64(b.N) / b.Elapsed().Seconds()
+	b.ReportMetric(throughput, "ops/sec")
 }
