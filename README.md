@@ -1,3 +1,3 @@
 # go-rtreed
-simple on-disk R-tree
+simple & very slow on-disk R-tree
 
