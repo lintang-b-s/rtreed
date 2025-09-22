@@ -30,20 +30,20 @@ func main() {
 	}
 	rtd.Close()
 
-	for i := 0; i < 1e2; i++ {
-		if (i+1)%1000 == 0 {
-			fmt.Printf("%v seconds for %d data\n", time.Since(startTimer).Seconds(), i+1)
-		}
-		// random lat lon
-		randomLat, _ := faker.LatitudeInRange(-7.818711242232534, -7.767187043571421)
-		randomLon, _ := faker.LongitudeInRange(110.32382482774563, 110.42872530361015)
-		point := tree.NewPoint(randomLat, randomLon)
-		results := rtd.SearchWithinRadius(point, 0.05) // 50 meter radius
-		if len(results) > 0 {
-			fmt.Printf("found %d results\n", len(results))
-		}
-	}
+	// for i := 0; i < 1e2; i++ {
+	// 	if (i+1)%1000 == 0 {
+	// 		fmt.Printf("%v seconds for %d data\n", time.Since(startTimer).Seconds(), i+1)
+	// 	}
+	// 	// random lat lon
+	// 	randomLat, _ := faker.LatitudeInRange(-7.818711242232534, -7.767187043571421)
+	// 	randomLon, _ := faker.LongitudeInRange(110.32382482774563, 110.42872530361015)
+	// 	point := tree.NewPoint(randomLat, randomLon)
+	// 	results := rtd.SearchWithinRadius(point, 0.05) // 50 meter radius
+	// 	if len(results) > 0 {
+	// 		fmt.Printf("found %d results\n", len(results))
+	// 	}
+	// }
 
-	fmt.Printf("%v seconds", time.Since(startTimer).Seconds())
+	fmt.Printf("%v ms", time.Since(startTimer).Milliseconds())
 
 }

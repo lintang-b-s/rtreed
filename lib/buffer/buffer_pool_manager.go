@@ -48,6 +48,10 @@ func (bpm *BufferPoolManager) getBufferAvailable() int {
 // flushAll. flush semua buffer yang terkait dengan transactionNum.
 func (bpm *BufferPoolManager) FlushAll() error {
 	for _, buffer := range bpm.bufferPool {
+		if buffer.blockID.GetFilename() == "" {
+			// unfilled frameId / free slot in buffer pool
+			continue
+		}
 
 		buffer.setPin(0)
 

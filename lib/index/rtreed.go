@@ -176,19 +176,7 @@ func (rt *Rtreed) insert(e tree.Entry, level int) {
 	lPage, llPage := rt.adjustTree(leafPage, llPage, &needToUnpin, leafIsRoot)
 
 	l := lPage.DeserializeNode()
-	for _, entry := range l.GetEntries() {
-		if entry.GetChild() != lib.NEW_PAGE_NUM {
-			// fmt.Printf("debug")
-		}
-	}
-	if llPage != nil {
-		ll = llPage.DeserializeNode()
-		for _, entry := range ll.GetEntries() {
-			if entry.GetChild() != lib.NEW_PAGE_NUM {
-				// fmt.Printf("debug")
-			}
-		}
-	}
+
 	if llPage != nil && l.GetPageNum() == root.GetPageNum() {
 		ll = llPage.DeserializeNode()
 		oldRoot := l
@@ -781,8 +769,14 @@ func (rt *Rtreed) searchWithinBound(bound tree.Rect) []tree.SpatialData {
 	if err != nil {
 		panic(err)
 	}
+	needToUnpin = append(needToUnpin, newUnpinPage(rt.root, false))
 
-	return rt.search(root, bound, results, &needToUnpin)
+	results = rt.search(root, bound, results, &needToUnpin)
+	for _, p := range needToUnpin {
+		blockId := disk.NewBlockID(lib.PAGE_FILE_NAME, int(p.getPageNum()))
+		rt.bufferPoolManager.UnpinPage(blockId, p.getIsDirty())
+	}
+	return results
 }
 
 func (rt *Rtreed) search(node *disk.NodeByte, bound tree.Rect,
@@ -797,6 +791,7 @@ func (rt *Rtreed) search(node *disk.NodeByte, bound tree.Rect,
 		node.ForEntries(func(e tree.Entry) {
 			if e.GetRect().Overlaps(bound) {
 				eChildNode, err := rt.getNodeByte(e.GetChild())
+				*needToUnpin = append(*needToUnpin, newUnpinPage(e.GetChild(), false))
 				if err != nil {
 					panic(err)
 				}
