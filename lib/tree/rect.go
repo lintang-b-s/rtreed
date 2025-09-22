@@ -1,8 +1,15 @@
-package index
+package tree
 
 type Point struct {
 	Lat float64
 	Lon float64
+}
+
+func NewPoint(lat, lon float64) Point {
+	return Point{
+		Lat: lat,
+		Lon: lon,
+	}
 }
 
 func NewRect(p Point, lengths []float64) (r Rect, err error) {
@@ -12,7 +19,16 @@ func NewRect(p Point, lengths []float64) (r Rect, err error) {
 	return
 }
 
-func (p Point) minDist(r Rect) float64 {
+func NewRectFromBounds(sLat, sLon, tLat, tLon float64) (r Rect) {
+
+	r.s.Lat = sLat
+	r.s.Lon = sLon
+	r.t.Lat = tLat
+	r.t.Lon = tLon
+	return
+}
+
+func (p Point) MinDist(r Rect) float64 {
 
 	sum := 0.0
 
@@ -33,6 +49,38 @@ func (p Point) minDist(r Rect) float64 {
 
 type Rect struct {
 	s, t Point
+}
+
+func (r Rect) GetSLat() float64 {
+	return r.s.Lat
+}
+
+func (r Rect) GetSLon() float64 {
+	return r.s.Lon
+}
+
+func (r Rect) GetTLat() float64 {
+	return r.t.Lat
+}
+
+func (r Rect) GetTLon() float64 {
+	return r.t.Lon
+}
+
+func (r *Rect) SetSLat(sLat float64) {
+	r.s.Lat = sLat
+}
+
+func (r *Rect) SetSLon(sLon float64) {
+	r.s.Lon = sLon
+}
+
+func (r *Rect) SetTLat(tLat float64) {
+	r.t.Lat = tLat
+}
+
+func (r *Rect) SetTLon(tLon float64) {
+	r.t.Lon = tLon
 }
 
 func (r Rect) Equal(other Rect) bool {
@@ -56,7 +104,7 @@ func (r Rect) Area() float64 {
 	return size
 }
 
-func (r Rect) containRect(r2 Rect) bool {
+func (r Rect) ContainRect(r2 Rect) bool {
 
 	if r.s.Lat > r2.s.Lat || r2.t.Lat > r.t.Lat {
 		return false
@@ -66,6 +114,18 @@ func (r Rect) containRect(r2 Rect) bool {
 		return false
 	}
 
+	return true
+}
+
+func (r Rect) Overlaps(r2 Rect) bool {
+
+	if r.s.Lat > r2.t.Lat || r2.s.Lat > r.t.Lat {
+		return false
+	}
+
+	if r.s.Lon > r2.t.Lon || r2.s.Lon > r.t.Lon {
+		return false
+	}
 	return true
 }
 
@@ -80,7 +140,7 @@ func (p Point) ToRect(tol float64) Rect {
 	return r
 }
 
-func createRectangle(r1, r2 Rect) (bb Rect) {
+func CreateRectangle(r1, r2 Rect) (bb Rect) {
 	// buat rectangle yg include r1 & r2
 
 	if r1.s.Lat <= r2.s.Lat {

@@ -1,7 +1,9 @@
 package index
 
+import "github.com/lintang-b-s/lbs/lib/tree"
+
 type Item interface {
-	  SpatialData
+	tree.SpatialData
 }
 type priorityQueueNode[T Item] struct {
 	rank  float64
@@ -14,6 +16,7 @@ type priorityQueue[T Item] []*priorityQueueNode[T]
 func (pq priorityQueue[Item]) Len() int {
 	return len(pq)
 }
+
 // max heap
 func (pq priorityQueue[Item]) Less(i, j int) bool {
 	return pq[i].rank > pq[j].rank
