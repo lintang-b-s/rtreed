@@ -6,11 +6,11 @@ import (
 )
 
 type Node struct {
-	parent  types.BlockNum
-	pageNum types.BlockNum
-	entries []*Entry
-	level   int
-	leaf    bool
+	entries []*Entry       // max_entries * max_size_of_entry
+	parent  types.BlockNum 
+	pageNum types.BlockNum 
+	level   int            
+	leaf    bool           
 }
 
 func NewNode(entries []*Entry, parent types.BlockNum, level int, leaf bool) *Node {
@@ -86,10 +86,11 @@ func (n *Node) GetEntry(idx int) *Entry {
 }
 
 type Entry struct {
-	rect  Rect
-	child types.BlockNum
-	obj   SpatialData
+	obj   SpatialData    // var(max_obj) size
+	rect  Rect           // 32 bytes
+	child types.BlockNum // 8 bytes
 }
+// var(max_obj) + 40 bytes
 
 func NewEntry(r Rect, c types.BlockNum, o SpatialData) *Entry {
 	return &Entry{

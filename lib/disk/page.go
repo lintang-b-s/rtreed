@@ -104,6 +104,7 @@ func (p *Page) SerializeNode(node *tree.Node) {
 	p.PutUint64(13, uint64(node.GetPageNum()))
 
 	leftPos := int32(21)
+	// max_page_size =   21 bytes + maxEntries * (10 + 48 + 8 + maxSpatialDataInBytes) bytes size
 	rightPos := len(p.bb.Bytes()) - 1
 	node.ForEntries(func(entry *tree.Entry) {
 
@@ -122,7 +123,7 @@ func (p *Page) SerializeNode(node *tree.Node) {
 		p.PutUint16(leftPos, uint16(offset))
 		leftPos += 2
 
-		rightPos -= sLen + 4
+		rightPos -= sLen + 4 // PutBytes also add length of bytes (4 byte uint32) to the buffer
 		p.PutBytes(int32(rightPos), enObj.Data())
 
 		rightPos -= 4
@@ -145,6 +146,7 @@ func (p *Page) SerializeNode(node *tree.Node) {
 		rightPos -= 8
 		p.PutUint64(int32(rightPos), math.Float64bits(llat))
 		rightPos -= 8
+
 		p.PutUint64(int32(rightPos), math.Float64bits(llon))
 
 	})

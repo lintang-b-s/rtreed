@@ -58,7 +58,7 @@ func (bpm *BufferPoolManager) GetNextBlockId() int {
 func (bpm *BufferPoolManager) FlushAll() error {
 	for _, buffer := range bpm.bufferPool {
 
-		if buffer.blockID.GetFilename() == "" {
+		if buffer.blockID.GetFilename() == "" || buffer.blockID.GetBlockNum() == 0 {
 			// unfilled frameId / free slot in buffer pool
 			continue
 		}

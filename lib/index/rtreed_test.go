@@ -8,7 +8,7 @@ import (
 )
 
 func TestRtreedInsert(t *testing.T) {
-	rtg, err := NewRtreed(2, 25, 50)
+	rtg, err := NewRtreed(2, 25, 40, 4)
 	if err != nil {
 		t.Errorf("Error creating rtreed: %s", err)
 	}

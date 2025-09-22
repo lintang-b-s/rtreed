@@ -28,6 +28,10 @@ func haversineDistance(latOne, longOne, latTwo, longTwo float64) float64 {
 	return earthRadiusKM * c
 }
 
+func HaversineDistance(latOne, longOne, latTwo, longTwo float64) float64 {
+	return haversineDistance(latOne, longOne, latTwo, longTwo)
+}
+
 // GetDestinationPoint returns the destination point given the starting point, bearing and distance
 // dist in km
 func getDestinationPoint(lat1, lon1 float64, bearing float64, dist float64) (float64, float64) {

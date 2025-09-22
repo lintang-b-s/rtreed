@@ -15,6 +15,7 @@ type DiskManagerI interface {
 	BlockSize() int
 	IsNew() bool
 	GetDBDir() string
+	Close() error
 }
 
 type LogManagerI interface {

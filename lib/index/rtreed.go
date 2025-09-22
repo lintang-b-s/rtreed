@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"container/heap"
 	"errors"
+	"fmt"
 	"math"
 	"os"
 	"sort"
@@ -18,21 +19,25 @@ import (
 )
 
 type Rtreed struct {
-	dim               int
-	minEntries        int
-	maxEntries        int
 	bufferPoolManager BufferPoolManager
 	diskManager       DiskManagerI
 	logManager        LogManagerI
-	root              types.BlockNum
 	metadata          *meta.Meta
+	root              types.BlockNum
+	dim               int
+	minEntries        int
+	maxEntries        int
 	size              int32
 	height            int
 }
 
-func NewRtreed(dim, min, max int) (*Rtreed, error) {
-
-	_, err := os.Stat(lib.DB_DIR)
+func NewRtreed(dim, min, max, maxSpatialDataInBytes int) (*Rtreed, error) {
+	// max_page_size =  max_page_size =   21 bytes + maxEntries * (10 + 48 + 8 + maxSpatialDataInBytes) bytes size  [see page.go SerializeNode()]
+	var err error
+	lib.MAX_PAGE_SIZE = 21 + max*(10+48+8+maxSpatialDataInBytes)
+	lib.MAX_BUFFER_POOL_SIZE = lib.MAX_BUFFER_POOL_SIZE_IN_MB * 1024 * 1024 / lib.MAX_PAGE_SIZE
+	lib.MAX_PAGE_SIZE, err = lib.CeilPageSize(lib.MAX_PAGE_SIZE)
+	_, err = os.Stat(lib.DB_DIR)
 	if !os.IsNotExist(err) {
 		// db exists
 		dm := disk.NewDiskManager(lib.DB_DIR, lib.MAX_PAGE_SIZE)
@@ -271,6 +276,10 @@ func (rt *Rtreed) chooseLeaf(n *tree.Node, nPage *buffer.Buffer, e *tree.Entry, 
 	child, childPage, err := rt.getNodeAndPage(chosenChild)
 	if err != nil {
 		panic(err)
+	}
+	en, _ := rt.getNFromParentEntry(child, needToUnpin)
+	if en == nil {
+		fmt.Printf("debug")
 	}
 
 	*needToUnpin = append(*needToUnpin, newUnpinPage(chosenChild, false))
@@ -834,7 +843,6 @@ func (rt *Rtreed) searchStack(bound tree.Rect, needToUnpin []unpinPage) []tree.S
 	results := make([]tree.SpatialData, 0, 100)
 	stack := make([]types.BlockNum, 0, 16)
 	stack = append(stack, rt.root)
-	fetchPageCount := 0
 
 	for len(stack) > 0 {
 		nPageNum := stack[len(stack)-1]
@@ -844,7 +852,6 @@ func (rt *Rtreed) searchStack(bound tree.Rect, needToUnpin []unpinPage) []tree.S
 		if err != nil {
 			panic(err)
 		}
-		fetchPageCount++
 		needToUnpin = append(needToUnpin, newUnpinPage(nPageNum, false))
 
 		if !node.IsLeaf() {
@@ -872,6 +879,6 @@ func (rt *Rtreed) searchStack(bound tree.Rect, needToUnpin []unpinPage) []tree.S
 		blockId := disk.NewBlockID(lib.PAGE_FILE_NAME, int(p.getPageNum()))
 		rt.bufferPoolManager.UnpinPage(blockId, p.getIsDirty())
 	}
-	_ = fetchPageCount
+
 	return results
 }

@@ -170,5 +170,5 @@ func (d *Rtreed) Close() error {
 		return err
 	}
 	d.bufferPoolManager.Close()
-	return nil
+	return d.diskManager.Close()
 }

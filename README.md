@@ -1,3 +1,8 @@
 # go-rtreed
-simple & very-slow on-disk R-tree
 
+simple & quite fast on-disk R-tree (latitude, longitude data)
+
+#### tested methods:
+
+- [x] Insert
+- [x] SearchWithinRadius

@@ -64,7 +64,7 @@ func (dm *DiskManager) Read(blockID BlockID, page *Page) error {
 // Write. menulis satu block page ke disk.
 func (dm *DiskManager) Write(blockID BlockID, page *Page) error {
 	filename := dm.dbDir + "/" + blockID.GetFilename()
-	
+
 	f, err := dm.getFile(filename)
 	if err != nil {
 		return err
@@ -152,4 +152,11 @@ func (dm *DiskManager) IsNew() bool {
 
 func (dm *DiskManager) GetDBDir() string {
 	return dm.dbDir
+}
+
+func (dm *DiskManager) Close() error {
+	for _, f := range dm.openFiles {
+		return f.Close()
+	}
+	return nil
 }
