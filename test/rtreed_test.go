@@ -45,26 +45,26 @@ func BenchmarkInsert(b *testing.B) {
 	b.StopTimer()
 	rtg.Close()
 
-	rtg2, err := index.NewRtreed(2, 25, 50)
-	if err != nil {
-		b.Errorf("Error creating rtreed: %s", err)
-	}
-	rt2 := NewRtree(rtg2)
+	// rtg2, err := index.NewRtreed(2, 25, 50)
+	// if err != nil {
+	// 	b.Errorf("Error creating rtreed: %s", err)
+	// }
+	// rt2 := NewRtree(rtg2)
 
-	faker2 := gofakeit.New(0)
-	b.ResetTimer()
+	// faker2 := gofakeit.New(0)
+	// b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
-		// random lat lon
-		randomLat, _ := faker2.LatitudeInRange(-7.818711242232534, -7.767187043571421)
-		randomLon, _ := faker2.LongitudeInRange(110.32382482774563, 110.42872530361015)
-		point := tree.NewPoint(randomLat, randomLon)
-		results := rt2.StRtree.SearchWithinRadius(point, 2.0)
-		if len(results) != 0 {
-			_ = results
-		}
-	}
-	b.StopTimer()
+	// for i := 0; i < b.N; i++ {
+	// 	// random lat lon
+	// 	randomLat, _ := faker2.LatitudeInRange(-7.818711242232534, -7.767187043571421)
+	// 	randomLon, _ := faker2.LongitudeInRange(110.32382482774563, 110.42872530361015)
+	// 	point := tree.NewPoint(randomLat, randomLon)
+	// 	results := rt2.StRtree.SearchWithinRadius(point, 2.0)
+	// 	if len(results) != 0 {
+	// 		_ = results
+	// 	}
+	// }
+	// b.StopTimer()
 }
 
 func BenchmarkSearch(b *testing.B) {

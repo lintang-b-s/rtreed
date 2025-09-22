@@ -750,14 +750,14 @@ func (rt *Rtreed) SearchWithinRadius(p tree.Point, radius float64) []tree.Spatia
 
 func (rt *Rtreed) searchWithinBound(bound tree.Rect) []tree.SpatialData {
 	results := []tree.SpatialData{}
-	root, err := rt.getNode(rt.root)
+	root, err := rt.getNodeByte(rt.root)
 	if err != nil {
 		panic(err)
 	}
 	return rt.search(root, bound, results)
 }
 
-func (rt *Rtreed) search(node *tree.Node, bound tree.Rect,
+func (rt *Rtreed) search(node *disk.NodeByte, bound tree.Rect,
 	results []tree.SpatialData) []tree.SpatialData {
 
 	// S1. [Search subtrees.] If T is not a leaf,
@@ -765,27 +765,28 @@ func (rt *Rtreed) search(node *tree.Node, bound tree.Rect,
 	// whether E.I Overlaps S. For all overlapping entries, invoke Search on the tree
 	// whose root node is pointed to by E.p
 	if !node.IsLeaf() {
-		for _, e := range node.GetEntries() {
+
+		node.ForEntries(func(e tree.Entry) {
 			if e.GetRect().Overlaps(bound) {
-				eChildNode, err := rt.getNode(e.GetChild())
+				eChildNode, err := rt.getNodeByte(e.GetChild())
 				if err != nil {
 					panic(err)
 				}
 				results = rt.search(eChildNode, bound, results)
 			}
-		}
+		})
 	} else {
-		for _, e := range node.GetEntries() {
+
+		node.ForEntries(func(e tree.Entry) {
 			if e.GetRect().Overlaps(bound) {
 				// S2. [Search leaf node.] If T is a leaf, check
 				// all entries E to determine whether E.I
 				// Overlaps S. If so, E is a qualifying
 				// record
-
 				eObj := e.GetObject()
 				results = append(results, eObj)
 			}
-		}
+		})
 	}
 
 	return results

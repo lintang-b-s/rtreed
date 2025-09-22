@@ -71,14 +71,7 @@ func (buf *Buffer) assignToBlock(blockID disk.BlockID, worker concurrent.WorkQue
 			log.Printf("error flush buffer: %v", err)
 			return err
 		}
-		// job := func() {
-		// 	err := buf.flush()
-		// 	if err != nil {
-		// 		log.Printf("error flush buffer: %v", err)
-		// 		panic(err)
-		// 	}
-		// }
-		// worker <- job
+		
 	}
 
 	buf.blockID = blockID

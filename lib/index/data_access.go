@@ -20,6 +20,17 @@ func (rt *Rtreed) getNode(pageNum types.BlockNum) (*tree.Node, error) {
 	return node, nil
 }
 
+func (rt *Rtreed) getNodeByte(pageNum types.BlockNum) (*disk.NodeByte, error) {
+	page, err := rt.bufferPoolManager.FetchPage(disk.NewBlockID(lib.PAGE_FILE_NAME, int(pageNum)))
+
+	if err != nil {
+		return nil, err
+	}
+
+
+	return page.GetNodePage(), nil
+}
+
 func (rt *Rtreed) writeNode(n *tree.Node) (*tree.Node, error) {
 	var (
 		page    *disk.Page
