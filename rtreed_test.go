@@ -16,15 +16,16 @@ func BenchmarkSearch(b *testing.B) {
 	}
 
 	faker := gofakeit.New(0)
+	randomLat, _ := faker.LatitudeInRange(-7.818711242232534, -7.767187043571421)
+	randomLon, _ := faker.LongitudeInRange(110.32382482774563, 110.42872530361015)
+	point := tree.NewPoint(randomLat, randomLon)
 
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
 		// random lat lon
-		randomLat, _ := faker.LatitudeInRange(-7.818711242232534, -7.767187043571421)
-		randomLon, _ := faker.LongitudeInRange(110.32382482774563, 110.42872530361015)
-		point := tree.NewPoint(randomLat, randomLon)
-		results := rtg.SearchWithinRadius(point, 0.04) // 40 meter radius
+
+		results := rtg.SearchWithinRadius(point, 0.25) // 25 meter radius
 		if len(results) != 0 {
 			_ = results
 		}

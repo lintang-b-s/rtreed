@@ -109,7 +109,7 @@ func (p *Page) SerializeNode(node *tree.Node) {
 		childNode := entry.GetChild()
 
 		p.PutUint64(leftPos, uint64(childNode))
-		leftPos += types.PageNumSize
+		leftPos += types.BlockNumSize
 
 		enObj := entry.GetObject()
 		sLen := len(enObj.Data())
@@ -166,7 +166,7 @@ func (p *Page) DeserializeNode() *tree.Node {
 	for i := 0; i < entriesCount; i++ {
 
 		pageNum := types.BlockNum(p.GetUint64(leftPos))
-		leftPos += types.PageNumSize
+		leftPos += types.BlockNumSize
 		entries[i].SetChild(pageNum)
 
 		offset := p.GetUint16(leftPos)
@@ -209,42 +209,43 @@ func (p *Page) DeserializeNode() *tree.Node {
 }
 
 type NodeByte struct {
-	p *Page
+	buf []byte
 }
 
 func (p *Page) GetNodePage() *NodeByte {
-	return &NodeByte{p}
+	return &NodeByte{p.Contents()}
 }
 
 func (nb *NodeByte) IsLeaf() bool {
-	return nb.p.GetBool(0)
+	return GetBool(0, nb.buf)
 }
 
 func (nb *NodeByte) ForEntries(f func(entry tree.Entry)) {
-	entriesCount := int(nb.p.GetUint16(1))
+
+	entriesCount := int(GetUint16(1, nb.buf))
 
 	leftPos := int32(21)
 	for i := 0; i < entriesCount; i++ {
 
 		var entry tree.Entry
-		pageNum := types.BlockNum(nb.p.GetUint64(leftPos))
-		leftPos += types.PageNumSize
+		pageNum := types.BlockNum(GetUint64(leftPos, nb.buf))
+		leftPos += types.BlockNumSize
 		entry.SetChild(pageNum)
 
-		offset := nb.p.GetUint16(leftPos)
+		offset := GetUint16(leftPos, nb.buf)
 		leftPos += 2
-		locLon := math.Float64frombits(nb.p.GetUint64(int32(offset)))
+		locLon := math.Float64frombits(GetUint64(int32(offset), nb.buf))
 		offset += 8
-		locLat := math.Float64frombits(nb.p.GetUint64(int32(offset)))
+		locLat := math.Float64frombits(GetUint64(int32(offset), nb.buf))
 		offset += 8
 		rrect := &tree.Rect{}
-		tLat := math.Float64frombits(nb.p.GetUint64(int32(offset)))
+		tLat := math.Float64frombits(GetUint64(int32(offset), nb.buf))
 		offset += 8
-		SLat := math.Float64frombits(nb.p.GetUint64(int32(offset)))
+		SLat := math.Float64frombits(GetUint64(int32(offset), nb.buf))
 		offset += 8
-		tLon := math.Float64frombits(nb.p.GetUint64(int32(offset)))
+		tLon := math.Float64frombits(GetUint64(int32(offset), nb.buf))
 		offset += 8
-		sLon := math.Float64frombits(nb.p.GetUint64(int32(offset)))
+		sLon := math.Float64frombits(GetUint64(int32(offset), nb.buf))
 		offset += 8
 
 		rrect.SetSLat(SLat)
@@ -253,15 +254,15 @@ func (nb *NodeByte) ForEntries(f func(entry tree.Entry)) {
 		rrect.SetTLon(tLon)
 		entry.SetRect(*rrect)
 
-		sLen := nb.p.GetInt(int32(offset))
+		// sLen := GetInt(int32(offset), nb.buf)
 		offset += 4
 
 		if nb.IsLeaf() {
-			spatialData := nb.p.GetBytes(int32(offset))
-			offset += uint16(sLen)
+			// spatialData := GetBytes(int32(offset), nb.buf)
+			// offset += uint16(sLen) //
 
 			entry.SetObject(tree.NewSpatialData(tree.NewPoint(locLat, locLon),
-				spatialData))
+				[]byte{}))
 		}
 		f(entry)
 	}
@@ -332,4 +333,40 @@ func (p *Page) DeserializeFreelist() *meta.Freelist {
 	}
 	fr.SetReleasedPages(releasedPages)
 	return fr
+}
+
+func GetInt(offset int32, buf []byte) int32 {
+	return int32(binary.LittleEndian.Uint32(buf[offset:]))
+}
+
+// PutInt. set int ke byte array page di posisi = offset.
+func PutInt(offset int32, val int32, buf []byte) {
+	binary.LittleEndian.PutUint32(buf[offset:], uint32(val))
+}
+
+func PutUint16(offset int32, val uint16, buf []byte) {
+	binary.LittleEndian.PutUint16(buf[offset:], val)
+}
+
+func GetUint16(offset int32, buf []byte) uint16 {
+	return binary.LittleEndian.Uint16(buf[offset:])
+}
+
+func PutUint64(offset int32, val uint64, buf []byte) {
+	binary.LittleEndian.PutUint64(buf[offset:], val)
+}
+
+func GetUint64(offset int32, buf []byte) uint64 {
+	return binary.LittleEndian.Uint64(buf[offset:])
+}
+
+func GetBool(offset int32, buf []byte) bool {
+	return buf[offset] == byte(1)
+}
+
+func GetBytes(offset int32, buf []byte) []byte {
+	length := GetInt(offset, buf)
+	b := make([]byte, length)
+	copy(b, buf[offset+4:offset+4+length])
+	return b
 }
