@@ -776,15 +776,17 @@ func (rt *Rtreed) SearchWithinRadius(p tree.Point, radius float64) []tree.Spatia
 
 func (rt *Rtreed) searchWithinBound(bound tree.Rect) []tree.SpatialData {
 	results := []tree.SpatialData{}
+	needToUnpin := make([]unpinPage, 0, 20)
 	root, err := rt.getNodeByte(rt.root)
 	if err != nil {
 		panic(err)
 	}
-	return rt.search(root, bound, results)
+
+	return rt.search(root, bound, results, &needToUnpin)
 }
 
 func (rt *Rtreed) search(node *disk.NodeByte, bound tree.Rect,
-	results []tree.SpatialData) []tree.SpatialData {
+	results []tree.SpatialData, needToUnpin *[]unpinPage) []tree.SpatialData {
 
 	// S1. [Search subtrees.] If T is not a leaf,
 	// check each entry E to determine
@@ -798,7 +800,7 @@ func (rt *Rtreed) search(node *disk.NodeByte, bound tree.Rect,
 				if err != nil {
 					panic(err)
 				}
-				results = rt.search(eChildNode, bound, results)
+				results = rt.search(eChildNode, bound, results, needToUnpin)
 			}
 		})
 	} else {

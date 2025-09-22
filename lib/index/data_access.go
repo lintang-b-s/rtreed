@@ -39,6 +39,7 @@ func (rt *Rtreed) getNodeByte(pageNum types.BlockNum) (*disk.NodeByte, error) {
 		return nil, err
 	}
 
+	rt.bufferPoolManager.UnpinPage(disk.NewBlockID(lib.PAGE_FILE_NAME, int(pageNum)), false)
 	return page.GetNodePage(), nil
 }
 
