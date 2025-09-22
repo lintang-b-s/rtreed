@@ -1,6 +1,9 @@
 package tree
 
-import "github.com/lintang-b-s/lbs/types"
+import (
+	"github.com/lintang-b-s/lbs/lib"
+	"github.com/lintang-b-s/lbs/types"
+)
 
 type Node struct {
 	parent  types.BlockNum
@@ -16,7 +19,7 @@ func NewNode(entries []Entry, parent types.BlockNum, level int, leaf bool) *Node
 		parent:  parent,
 		level:   level,
 		leaf:    leaf,
-		pageNum: 3,
+		pageNum: lib.NEW_PAGE_NUM,
 	}
 }
 

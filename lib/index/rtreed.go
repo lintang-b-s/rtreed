@@ -25,7 +25,6 @@ type Rtreed struct {
 	diskManager       DiskManagerI
 	logManager        LogManagerI
 	root              types.BlockNum
-	freeList          *meta.Freelist
 	metadata          *meta.Meta
 	size              int32
 	height            int
@@ -58,12 +57,6 @@ func NewRtreed(dim, min, max int) (*Rtreed, error) {
 		}
 		rt.metadata = meta
 
-		freelist, err := rt.readFreeList()
-		if err != nil {
-			return nil, err
-		}
-		rt.freeList = freelist
-
 		rt.root = rt.metadata.GetRoot()
 		rt.height = rt.metadata.GetHeight()
 		rt.size = rt.metadata.GetSize()
@@ -87,19 +80,12 @@ func NewRtreed(dim, min, max int) (*Rtreed, error) {
 			bufferPoolManager: bufferPoolManager,
 			metadata:          meta.NewEmptyMeta(),
 		}
-		rt.freeList = meta.NewFreelist()
 
-		rt.metadata.SetFreelistPage(rt.freeList.GetNextPage())
-		rt.root = 2
+		rt.root = 1
 		rt.metadata.SetRoot(rt.root)
 		rt.metadata.SetHeight(rt.height)
 		rt.metadata.SetSize(rt.size)
 		err = rt.writeMeta()
-		if err != nil {
-			return nil, err
-		}
-
-		err = rt.writeFreeList()
 		if err != nil {
 			return nil, err
 		}
@@ -118,7 +104,7 @@ func NewRtreed(dim, min, max int) (*Rtreed, error) {
 }
 
 func (rt *Rtreed) Insert(obj tree.SpatialData) {
-	e := tree.NewEntry(obj.Bounds(), newPageNum, obj)
+	e := tree.NewEntry(obj.Bounds(), lib.NEW_PAGE_NUM, obj)
 	rt.insert(e, 1)
 
 	rt.size++
@@ -162,7 +148,7 @@ func (rt *Rtreed) insert(e tree.Entry, level int) {
 
 	leaf.AppendEntry(e)
 
-	if e.GetChild() != newPageNum {
+	if e.GetChild() != lib.NEW_PAGE_NUM {
 		// set parent
 		eChild, eChildPage, err := rt.getNodeAndPage(e.GetChild())
 		if err != nil {
@@ -191,14 +177,14 @@ func (rt *Rtreed) insert(e tree.Entry, level int) {
 
 	l := lPage.DeserializeNode()
 	for _, entry := range l.GetEntries() {
-		if entry.GetChild() != newPageNum {
+		if entry.GetChild() != lib.NEW_PAGE_NUM {
 			// fmt.Printf("debug")
 		}
 	}
 	if llPage != nil {
 		ll = llPage.DeserializeNode()
 		for _, entry := range ll.GetEntries() {
-			if entry.GetChild() != newPageNum {
+			if entry.GetChild() != lib.NEW_PAGE_NUM {
 				// fmt.Printf("debug")
 			}
 		}
@@ -209,7 +195,7 @@ func (rt *Rtreed) insert(e tree.Entry, level int) {
 		rt.height++
 
 		newRoot := &tree.Node{}
-		newRoot.SetPageNum(newPageNum)
+		newRoot.SetPageNum(lib.NEW_PAGE_NUM)
 
 		newRootEntries := make([]tree.Entry, 0, 2)
 		newRootEntries = append(newRootEntries, tree.NewEntry(createNodeRectangle(*oldRoot), oldRoot.GetPageNum(), tree.SpatialData{}))
@@ -429,7 +415,7 @@ func (rt *Rtreed) splitNode(nPage *disk.Page, minGroupSize int, needToUnpin *[]u
 	groupTwo.SetIsleaf(n.IsLeaf())
 	groupTwo.SetLevel(n.Level())
 	groupTwo.SetEntries([]tree.Entry{entryTwo})
-	groupTwo.SetPageNum(newPageNum)
+	groupTwo.SetPageNum(lib.NEW_PAGE_NUM)
 
 	groupTwoUpdated, groupTwoPage, err := rt.writeNodeAndGetPage(groupTwo)
 	if err != nil {
@@ -438,7 +424,7 @@ func (rt *Rtreed) splitNode(nPage *disk.Page, minGroupSize int, needToUnpin *[]u
 
 	rt.bufferPoolManager.UnpinPage(disk.NewBlockID(lib.PAGE_FILE_NAME, int(groupTwoUpdated.GetPageNum())), true)
 
-	if entryTwo.GetChild() != newPageNum {
+	if entryTwo.GetChild() != lib.NEW_PAGE_NUM {
 		entryTwoChild, entryTwoChildPage, err := rt.getNodeAndPage(entryTwo.GetChild())
 		if err != nil {
 			panic(err)
@@ -449,7 +435,7 @@ func (rt *Rtreed) splitNode(nPage *disk.Page, minGroupSize int, needToUnpin *[]u
 		*needToUnpin = append(*needToUnpin, newUnpinPage(entryTwo.GetChild(), true))
 
 	}
-	if entryOne.GetChild() != newPageNum {
+	if entryOne.GetChild() != lib.NEW_PAGE_NUM {
 		entryOneChild, entryOneChildPage, err := rt.getNodeAndPage(entryOne.GetChild())
 		if err != nil {
 			panic(err)
@@ -496,11 +482,13 @@ func (rt *Rtreed) splitNode(nPage *disk.Page, minGroupSize int, needToUnpin *[]u
 
 	nPage.SerializeNode(groupOne)
 	groupTwoPage.SerializeNode(groupTwoUpdated)
+	*needToUnpin = append(*needToUnpin, newUnpinPage(groupOne.GetPageNum(), true))
+	*needToUnpin = append(*needToUnpin, newUnpinPage(groupTwoUpdated.GetPageNum(), true))
 	return nPage, groupTwoPage
 }
 
 func (rt *Rtreed) assignEntryToGroup(e tree.Entry, group *tree.Node) {
-	if e.GetChild() != newPageNum {
+	if e.GetChild() != lib.NEW_PAGE_NUM {
 		eChild, eChildPage, _ := rt.getNodeAndPage(e.GetChild())
 		var childPageNum types.BlockNum = 0
 

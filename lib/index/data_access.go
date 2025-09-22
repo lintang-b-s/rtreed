@@ -69,7 +69,7 @@ func (rt *Rtreed) writeNode(n *tree.Node) (*tree.Node, error) {
 		err     error
 		blockId disk.BlockID
 	)
-	if n.GetPageNum() == 3 {
+	if n.GetPageNum() == lib.NEW_PAGE_NUM {
 		page, err = rt.bufferPoolManager.NewPage(&blockId)
 		if err != nil {
 			return nil, err
@@ -102,13 +102,13 @@ func (rt *Rtreed) writeNodeAndGetPage(n *tree.Node) (*tree.Node, *disk.Page, err
 		err     error
 		blockId disk.BlockID
 	)
-	if n.GetPageNum() == 3 {
+	if n.GetPageNum() == lib.NEW_PAGE_NUM {
 		page, err := rt.bufferPoolManager.NewPage(&blockId)
 		if err != nil {
 			return nil, nil, err
 		}
 		blockId.SetFileName(lib.PAGE_FILE_NAME)
-		
+
 		page.SerializeNode(n)
 		n.SetPageNum(types.BlockNum(blockId.GetBlockNum()))
 		err = rt.diskManager.Write(blockId, page)
@@ -129,37 +129,12 @@ func (rt *Rtreed) writeNodeAndGetPage(n *tree.Node) (*tree.Node, *disk.Page, err
 
 }
 
-func (rt *Rtreed) writeFreeList() error {
-	var blockId disk.BlockID
-	page, err := rt.bufferPoolManager.NewPage(&blockId)
-	if err != nil {
-		return err
-	}
-	page.SerializeFreelist(rt.freeList)
-	err = rt.diskManager.Write(blockId, page)
-	return err
-}
-
-func (rt *Rtreed) readFreeList() (*meta.Freelist, error) {
-	pageNum := rt.metadata.GetFreelistPage()
-	blockId := disk.NewBlockID(lib.PAGE_FILE_NAME, int(pageNum))
-	page, err := rt.bufferPoolManager.FetchPage(blockId)
-	if err != nil {
-		return nil, err
-	}
-
-	freeList := page.DeserializeFreelist()
-	return freeList, nil
-}
-
 func (rt *Rtreed) writeMeta() error {
-	var blockId disk.BlockID
-	page, err := rt.bufferPoolManager.NewPage(&blockId)
-	if err != nil {
-		return err
-	}
+	page := disk.NewPage(lib.MAX_PAGE_SIZE)
+	blockId := disk.NewBlockID(lib.PAGE_FILE_NAME, metaPageNum)
+
 	page.SerializeMetadata(rt.metadata)
-	err = rt.diskManager.Write(blockId, page)
+	err := rt.diskManager.Write(blockId, page)
 	return err
 }
 
@@ -187,11 +162,11 @@ func (d *Rtreed) Close() error {
 	if err != nil {
 		return err
 	}
-
-	err = d.writeFreeList()
+	root, err := d.getNode(d.metadata.GetRoot())
 	if err != nil {
 		return err
 	}
+	_ = root
 
 	err = d.bufferPoolManager.FlushAll()
 	if err != nil {

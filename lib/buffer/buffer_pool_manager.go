@@ -37,7 +37,7 @@ func NewBufferPoolManager(numBuffers int, diskManager DiskManager,
 	backgroundFileWriter := concurrent.NewWorkerQueue(1)
 
 	return &BufferPoolManager{bufferPool: bufferPool, numAvailable: numBuffers,
-		poolSize: numBuffers, bufferTable: make(map[disk.BlockID]int), freeList: fl, replacer: NewLRUReplacer(numBuffers), nextBlockID: 0,
+		poolSize: numBuffers, bufferTable: make(map[disk.BlockID]int), freeList: fl, replacer: NewLRUReplacer(numBuffers), nextBlockID: 1,
 		workerQueue: backgroundFileWriter}
 }
 
@@ -48,13 +48,9 @@ func (bpm *BufferPoolManager) getBufferAvailable() int {
 // flushAll. flush semua buffer yang terkait dengan transactionNum.
 func (bpm *BufferPoolManager) FlushAll() error {
 	for _, buffer := range bpm.bufferPool {
-		if buffer.blockID.GetBlockNum() == 0 || buffer.blockID.GetBlockNum() == 1 {
-			continue
-		}
 
 		buffer.setPin(0)
 
-		bpm.DeletePage(buffer.getBlockID())
 		err := buffer.flush()
 		if err != nil {
 			return err
@@ -242,13 +238,14 @@ func (bpm *BufferPoolManager) NewPage(blockID *disk.BlockID) (*disk.Page, error)
 	}
 
 	replacedBuffer := bpm.bufferPool[frameID]
-	if bpm.nextBlockID == 3 {
+	if bpm.nextBlockID == lib.NEW_PAGE_NUM {
 		bpm.nextBlockID++
 	}
 
 	*blockID = disk.NewBlockID(lib.PAGE_FILE_NAME, bpm.nextBlockID) // create new blockID
 	bpm.nextBlockID++
 
+	bpm.bufferPool[frameID].blockID = *blockID
 	replacedBuffer.incrementPin() // incerment pin jadi 1
 
 	bpm.bufferTable[*blockID] = frameID
