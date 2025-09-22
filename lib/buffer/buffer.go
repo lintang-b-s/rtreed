@@ -71,7 +71,14 @@ func (buf *Buffer) assignToBlock(blockID disk.BlockID, worker concurrent.WorkQue
 			log.Printf("error flush buffer: %v", err)
 			return err
 		}
-		
+
+		// flush in background
+		// job := func() {
+		// 	if err := buf.flush(); err != nil {
+		// 		log.Printf("error flush buffer: %v", err)
+		// 	}
+		// }
+		// worker <- job // case stale read susah didebug hahah
 	}
 
 	buf.blockID = blockID
@@ -113,6 +120,7 @@ func (buf *Buffer) decrementPin() {
 func (buf *Buffer) setPin(pinCount int) {
 	buf.pins = pinCount
 }
+
 // setDirty. set dirty flag
 func (buf *Buffer) setDirty(isDirty bool) {
 	buf.isDirty = isDirty

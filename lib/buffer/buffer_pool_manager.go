@@ -34,7 +34,7 @@ func NewBufferPoolManager(numBuffers int, diskManager DiskManager,
 		fl[i] = i //
 	}
 
-	backgroundFileWriter := concurrent.NewWorkerQueue(3)
+	backgroundFileWriter := concurrent.NewWorkerQueue(1)
 
 	return &BufferPoolManager{bufferPool: bufferPool, numAvailable: numBuffers,
 		poolSize: numBuffers, bufferTable: make(map[disk.BlockID]int), freeList: fl, replacer: NewLRUReplacer(numBuffers), nextBlockID: 0,
