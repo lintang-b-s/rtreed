@@ -18,6 +18,10 @@ func (b *BlockID) GetFilename() string {
 	return b.filename
 }
 
+func (b *BlockID) SetFileName(filename string) {
+	b.filename = filename
+}
+
 func (b *BlockID) GetBlockNum() int {
 	return b.blockNum
 }

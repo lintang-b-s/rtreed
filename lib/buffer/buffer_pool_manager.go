@@ -194,7 +194,7 @@ func (bpm *BufferPoolManager) PinPage(blockID disk.BlockID) (*Buffer, error) {
 	bpm.bufferTable[blockID] = frameID
 	bpm.bufferPool[frameID] = replacedBuffer
 
-	bpm.replacer.Pin(frameID) // pin frameID biar tidka di evict dari buffer pool
+	bpm.replacer.Pin(frameID) // pin frameID biar tidak di evict dari buffer pool
 
 	return replacedBuffer, nil
 }
@@ -229,26 +229,34 @@ func (bpm *BufferPoolManager) NewPage(blockID *disk.BlockID) (*disk.Page, error)
 		if !bpm.replacer.Victim(&frameID) {
 			return nil, fmt.Errorf("no available frame")
 		}
+		if bpm.bufferPool[frameID].getIsDirty() && bpm.bufferPool[frameID].blockID != (disk.BlockID{}) {
+			// kalau page yang di evict dari buffer pool dirty (habis diupdate), flush page tsb
+			err := bpm.bufferPool[frameID].flush()
+			if err != nil {
+				return nil, err
+			}
+		}
 
 		bpm.bufferPool[frameID].ResetMemory()
 		delete(bpm.bufferTable, bpm.bufferPool[frameID].getBlockID())
 	}
 
 	replacedBuffer := bpm.bufferPool[frameID]
+	if bpm.nextBlockID == 3 {
+		bpm.nextBlockID++
+	}
 
-	newPage := disk.NewPage(lib.MAX_PAGE_SIZE)                      //create new page
 	*blockID = disk.NewBlockID(lib.PAGE_FILE_NAME, bpm.nextBlockID) // create new blockID
 	bpm.nextBlockID++
 
-	replacedBuffer.assignToBlock(*blockID, bpm.workerQueue) // flush buffer sebelumnya & assign buffer ke page yang baru & set pin = 0
-	replacedBuffer.incrementPin()                           // incerment pin jadi 1
+	replacedBuffer.incrementPin() // incerment pin jadi 1
 
 	bpm.bufferTable[*blockID] = frameID
 	bpm.bufferPool[frameID] = replacedBuffer
 
-	bpm.replacer.Pin(frameID) // pin frameID biar tidka di evict dari buffer pool
+	bpm.replacer.Pin(frameID) // pin frameID biar tidak di evict dari buffer pool
 
-	return newPage, nil
+	return replacedBuffer.contents, nil
 }
 
 // DeletePage. Removes a page from the database, both on disk and in memory.

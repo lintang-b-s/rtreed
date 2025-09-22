@@ -26,4 +26,5 @@ type BufferPoolManager interface {
 	FetchPage(blockID disk.BlockID) (*disk.Page, error)
 	FlushAll() error
 	Close()
+	NewPage(blockID *disk.BlockID) (*disk.Page, error)
 }

@@ -16,7 +16,7 @@ func NewNode(entries []Entry, parent types.BlockNum, level int, leaf bool) *Node
 		parent:  parent,
 		level:   level,
 		leaf:    leaf,
-		pageNum: 1,
+		pageNum: 3,
 	}
 }
 
@@ -78,7 +78,7 @@ func (n *Node) AppendEntry(e Entry) {
 	n.entries = append(n.entries, e)
 }
 
-func (n *Node)  GetEntry(idx int) Entry {
+func (n *Node) GetEntry(idx int) Entry {
 	return n.entries[idx]
 }
 

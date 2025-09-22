@@ -1,7 +1,6 @@
 package test
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/brianvoe/gofakeit/v7"
@@ -33,9 +32,7 @@ func BenchmarkInsert(b *testing.B) {
 
 	for i := 0; i < 1000; i++ {
 		// random lat lon
-		if i == 999 {
-			fmt.Printf("debug")
-		}
+
 		randomLat, _ := faker.LatitudeInRange(-7.818711242232534, -7.767187043571421)
 		randomLon, _ := faker.LongitudeInRange(110.32382482774563, 110.42872530361015)
 		point := tree.NewPoint(randomLat, randomLon)

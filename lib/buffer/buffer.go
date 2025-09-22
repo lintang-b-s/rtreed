@@ -3,6 +3,7 @@ package buffer
 import (
 	"log"
 
+	"github.com/lintang-b-s/lbs/lib"
 	"github.com/lintang-b-s/lbs/lib/concurrent"
 	"github.com/lintang-b-s/lbs/lib/disk"
 )
@@ -131,9 +132,9 @@ func (buf *Buffer) getIsDirty() bool {
 	return buf.isDirty
 }
 
-// ResetMemory. reset buffer contents jadi byte array dengan capacity 0.
+// ResetMemory. reset buffer contents jadi byte array dengan capacity MAX_PAGE_SIZE.
 func (buf *Buffer) ResetMemory() {
-	buf.contents = disk.NewPage(0)
+	buf.contents = disk.NewPage(lib.MAX_PAGE_SIZE)
 }
 
 func (buf *Buffer) getContentsSize() *disk.Page {

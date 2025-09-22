@@ -31,6 +31,9 @@ func NewDiskManager(dbDir string, blockSize int) *DiskManager {
 // Read. membaca satu block page dari disk.
 func (dm *DiskManager) Read(blockID BlockID, page *Page) error {
 	filename := dm.dbDir + "/" + blockID.GetFilename()
+	if filename == "go_rtreed_db/" {
+		return nil
+	}
 	f, err := dm.getFile(filename) // open file dengan nama filename
 	if err != nil {
 		return err
@@ -61,6 +64,9 @@ func (dm *DiskManager) Read(blockID BlockID, page *Page) error {
 // Write. menulis satu block page ke disk.
 func (dm *DiskManager) Write(blockID BlockID, page *Page) error {
 	filename := dm.dbDir + "/" + blockID.GetFilename()
+	if filename == "go_rtreed_db/" {
+		return nil
+	}
 	f, err := dm.getFile(filename)
 	if err != nil {
 		return err

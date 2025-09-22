@@ -105,10 +105,12 @@ func NewRtreed(dim, min, max int) (*Rtreed, error) {
 		}
 
 		rootNode := tree.NewNode([]tree.Entry{}, 0, 1, true)
-		rootNode, err = rt.writeNode(rootNode)
+		rootNode.SetPageNum(2) // initial root page num is 2
+		rootNode, err = rt.writeRootNode(rootNode)
 		if err != nil {
 			return nil, err
 		}
+		rt.bufferPoolManager.UnpinPage(disk.NewBlockID(lib.PAGE_FILE_NAME, int(rootNode.GetPageNum())), true)
 
 		return rt, nil
 	}
@@ -144,53 +146,70 @@ func (rt *Rtreed) insert(e tree.Entry, level int) {
 
 	needToUnpin := make([]unpinPage, 0, 10)
 
-	root, err := rt.getNode(rt.root)
+	root, rootPage, err := rt.getNodeAndPage(rt.root)
 	if err != nil {
 		panic(err)
 	}
 	needToUnpin = append(needToUnpin, newUnpinPage(root.GetPageNum(), false))
 
 	var leaf *tree.Node
+	var leafPage *disk.Page
 	if level != 1 {
-		leaf = rt.chooseNode(root, e, level, &needToUnpin)
+		leaf, leafPage = rt.chooseNode(root, rootPage, e, level, &needToUnpin)
 	} else {
-		leaf = rt.chooseLeaf(root, e, &needToUnpin)
+		leaf, leafPage = rt.chooseLeaf(root, rootPage, e, &needToUnpin)
 	}
 
 	leaf.AppendEntry(e)
 
-	eChild, _ := rt.getNode(e.GetChild())
-	needToUnpin = append(needToUnpin, newUnpinPage(e.GetChild(), false))
-
-	if eChild != nil {
-		eChild.SetParent(leaf.GetPageNum())
-		if eChild.GetPageNum() == 0 {
-			eChild.SetPageNum(1)
+	if e.GetChild() != newPageNum {
+		// set parent
+		eChild, eChildPage, err := rt.getNodeAndPage(e.GetChild())
+		if err != nil {
+			panic(err)
 		}
-		rt.writeNode(eChild)
-
+		eChild.SetParent(leaf.GetPageNum())
+		eChildPage.SerializeNode(eChild)
 		needToUnpin = append(needToUnpin, newUnpinPage(eChild.GetPageNum(), true))
+
+		leaf.SetEntry(len(leaf.GetEntries())-1, tree.NewEntry(e.GetRect(), eChild.GetPageNum(), e.GetObject()))
+		leafPage.SerializeNode(leaf)
+		needToUnpin = append(needToUnpin, newUnpinPage(leaf.GetPageNum(), true))
 	}
 
-	leaf.SetEntry(len(leaf.GetEntries())-1, tree.NewEntry(e.GetRect(), eChild.GetPageNum(), e.GetObject()))
-	leaf, err = rt.writeNode(leaf)
-	if err != nil {
-		panic(err)
-	}
+	leafPage.SerializeNode(leaf)
 	needToUnpin = append(needToUnpin, newUnpinPage(leaf.GetPageNum(), true))
+
 	leafIsRoot := leaf.GetPageNum() == root.GetPageNum()
 	var ll *tree.Node
+	var llPage *disk.Page
 	if leaf.GetEntriesSize() > rt.maxEntries {
-		leaf, ll = rt.splitNode(leaf, rt.minEntries, &needToUnpin)
+		leafPage, llPage = rt.splitNode(leafPage, rt.minEntries, &needToUnpin)
 	}
 
-	l, ll := rt.adjustTree(leaf, ll, &needToUnpin, leafIsRoot)
-	if ll != nil && l.GetPageNum() == root.GetPageNum() {
+	lPage, llPage := rt.adjustTree(leafPage, llPage, &needToUnpin, leafIsRoot)
+
+	l := lPage.DeserializeNode()
+	for _, entry := range l.GetEntries() {
+		if entry.GetChild() != newPageNum {
+			// fmt.Printf("debug")
+		}
+	}
+	if llPage != nil {
+		ll = llPage.DeserializeNode()
+		for _, entry := range ll.GetEntries() {
+			if entry.GetChild() != newPageNum {
+				// fmt.Printf("debug")
+			}
+		}
+	}
+	if llPage != nil && l.GetPageNum() == root.GetPageNum() {
+		ll = llPage.DeserializeNode()
 		oldRoot := l
 		rt.height++
 
 		newRoot := &tree.Node{}
-		newRoot.SetPageNum(1)
+		newRoot.SetPageNum(newPageNum)
 
 		newRootEntries := make([]tree.Entry, 0, 2)
 		newRootEntries = append(newRootEntries, tree.NewEntry(createNodeRectangle(*oldRoot), oldRoot.GetPageNum(), tree.SpatialData{}))
@@ -202,19 +221,20 @@ func (rt *Rtreed) insert(e tree.Entry, level int) {
 		newRoot.SetLevel(rt.height)
 		newRoot.SetEntries(newRootEntries)
 
-		newRoot, err = rt.writeNode(newRoot)
+		newRootUpdated, err := rt.writeNode(newRoot)
 		if err != nil {
 			panic(err)
 		}
-		needToUnpin = append(needToUnpin, newUnpinPage(newRoot.GetPageNum(), true))
+		needToUnpin = append(needToUnpin, newUnpinPage(newRootUpdated.GetPageNum(), true))
 
-		rt.root = newRoot.GetPageNum()
-		rt.upateMetaRoot(newRoot.GetPageNum())
+		rt.root = newRootUpdated.GetPageNum()
+		rt.upateMetaRoot(newRootUpdated.GetPageNum())
 
 		oldRoot.SetParent(rt.root)
 		ll.SetParent(rt.root)
-		rt.writeNode(ll)
-		rt.writeNode(oldRoot)
+
+		llPage.SerializeNode(ll)
+		lPage.SerializeNode(oldRoot)
 
 		needToUnpin = append(needToUnpin, newUnpinPage(ll.GetPageNum(), true))
 		needToUnpin = append(needToUnpin, newUnpinPage(oldRoot.GetPageNum(), true))
@@ -241,55 +261,61 @@ func chooseLeastEnlargement(entries []tree.Entry, e tree.Entry) types.BlockNum {
 }
 
 // chooseNode finds the node at the specified level to which e should be added.
-func (rt *Rtreed) chooseNode(n *tree.Node, e tree.Entry, level int,
-	needToUnpin *[]unpinPage) *tree.Node {
+func (rt *Rtreed) chooseNode(n *tree.Node, nPage *disk.Page, e tree.Entry, level int,
+	needToUnpin *[]unpinPage) (*tree.Node, *disk.Page) {
 	if n.Level() == level {
-		return n
+		return n, nPage
 	}
 	chosenChild := chooseLeastEnlargement(n.GetEntries(), e)
 
 	if chosenChild == 0 {
-		return n
+		return n, nPage
 	}
-	child, err := rt.getNode(chosenChild)
+	child, childPage, err := rt.getNodeAndPage(chosenChild)
 	if err != nil {
 		panic(err)
 	}
-	*needToUnpin = append(*needToUnpin, newUnpinPage(n.GetPageNum(), false))
-	return rt.chooseNode(child, e, level, needToUnpin)
+	rt.bufferPoolManager.UnpinPage(disk.NewBlockID(lib.PAGE_FILE_NAME, int(chosenChild)), false)
+	return rt.chooseNode(child, childPage, e, level, needToUnpin)
 }
 
-func (rt *Rtreed) chooseLeaf(n *tree.Node, e tree.Entry, needToUnpin *[]unpinPage) *tree.Node {
+func (rt *Rtreed) chooseLeaf(n *tree.Node, nPage *disk.Page, e tree.Entry, needToUnpin *[]unpinPage) (*tree.Node, *disk.Page) {
 
 	if n.IsLeaf() {
-		return n
+		return n, nPage
 	}
 
 	chosenChild := chooseLeastEnlargement(n.GetEntries(), e)
 
 	if chosenChild == 0 {
-		return n
+		return n, nPage
 	}
 
-	child, err := rt.getNode(chosenChild)
+	child, childPage, err := rt.getNodeAndPage(chosenChild)
 	if err != nil {
 		panic(err)
 	}
-	*needToUnpin = append(*needToUnpin, newUnpinPage(n.GetPageNum(), false))
-	return rt.chooseLeaf(child, e, needToUnpin)
+	rt.bufferPoolManager.UnpinPage(disk.NewBlockID(lib.PAGE_FILE_NAME, int(chosenChild)), false)
+	return rt.chooseLeaf(child, childPage, e, needToUnpin)
 }
 
-func (rt *Rtreed) adjustTree(l, ll *tree.Node, needToUnpin *[]unpinPage, leafIsRoot bool) (*tree.Node, *tree.Node) {
-	root, err := rt.getNode(rt.root)
+func (rt *Rtreed) adjustTree(lPage, llPage *disk.Page, needToUnpin *[]unpinPage, leafIsRoot bool) (*disk.Page, *disk.Page) {
+	root, rootPage, err := rt.getNodeAndPage(rt.root)
 	if err != nil {
 		panic(err)
 	}
 	*needToUnpin = append(*needToUnpin, newUnpinPage(root.GetPageNum(), leafIsRoot))
+	l := lPage.DeserializeNode()
 
 	if l.GetPageNum() == root.GetPageNum() {
-		rt.writeNode(l)
+		lPage.SerializeNode(l)
+		if llPage != nil {
+			ll := llPage.DeserializeNode()
+			llPage.SerializeNode(ll)
+			*needToUnpin = append(*needToUnpin, newUnpinPage(ll.GetPageNum(), true))
+		}
 		*needToUnpin = append(*needToUnpin, newUnpinPage(l.GetPageNum(), true))
-		return l, ll
+		return lPage, llPage
 	}
 
 	en, idx := rt.getNFromParentEntry(l, needToUnpin)
@@ -298,39 +324,44 @@ func (rt *Rtreed) adjustTree(l, ll *tree.Node, needToUnpin *[]unpinPage, leafIsR
 	en.SetRect(createNodeRectangle(*l))
 	en.SetChild(l.GetPageNum())
 
-	lParent, err := rt.getNode(l.GetParent())
+	lParent, lParentPage, err := rt.getNodeAndPage(l.GetParent())
 	if err != nil {
 		panic(err)
 	}
 	lParent.SetEntry(idx, *en)
 
-	if ll == nil {
-		rt.writeNode(l)
-		rt.writeNode(lParent)
+	if llPage == nil {
+
+		lPage.SerializeNode(l)
+		lParentPage.SerializeNode(lParent)
 
 		*needToUnpin = append(*needToUnpin, newUnpinPage(l.GetPageNum(), true))
 		*needToUnpin = append(*needToUnpin, newUnpinPage(lParent.GetPageNum(), true))
 
 		if en.GetRect().Equal(prevRect) {
-			return root, nil
+			return rootPage, nil
 		}
-		return rt.adjustTree(lParent, nil, needToUnpin, leafIsRoot)
+		return rt.adjustTree(lParentPage, nil, needToUnpin, leafIsRoot)
 	}
+
+	ll := llPage.DeserializeNode()
 
 	ell := tree.NewEntry(createNodeRectangle(*ll), ll.GetPageNum(), tree.SpatialData{})
 	lParent.AppendEntry(ell)
 
-	rt.writeNode(l)
-	rt.writeNode(ll)
+	llPage.SerializeNode(ll)
+	lPage.SerializeNode(l)
+	lParentPage.SerializeNode(lParent)
 
+	*needToUnpin = append(*needToUnpin, newUnpinPage(lParent.GetPageNum(), true))
 	*needToUnpin = append(*needToUnpin, newUnpinPage(l.GetPageNum(), true))
 	*needToUnpin = append(*needToUnpin, newUnpinPage(ll.GetPageNum(), true))
 
 	if len(lParent.GetEntries()) < rt.maxEntries {
-		return rt.adjustTree(lParent, nil, needToUnpin, leafIsRoot)
+		return rt.adjustTree(lParentPage, nil, needToUnpin, leafIsRoot)
 	}
 
-	newl, newll := rt.splitNode(lParent, rt.minEntries, needToUnpin)
+	newl, newll := rt.splitNode(lParentPage, rt.minEntries, needToUnpin)
 	return rt.adjustTree(newl, newll, needToUnpin, leafIsRoot)
 }
 
@@ -382,7 +413,8 @@ func (rt *Rtreed) pickSeeds(n *tree.Node) (int, int) {
 	return entryOneIDx, entryTwoIDx
 }
 
-func (rt *Rtreed) splitNode(n *tree.Node, minGroupSize int, needToUnpin *[]unpinPage) (*tree.Node, *tree.Node) {
+func (rt *Rtreed) splitNode(nPage *disk.Page, minGroupSize int, needToUnpin *[]unpinPage) (*disk.Page, *disk.Page) {
+	n := nPage.DeserializeNode()
 	entryOneIDx, entryTwoIDx := rt.pickSeeds(n)
 	entryOne, entryTwo := n.GetEntry(entryOneIDx), n.GetEntry(entryTwoIDx)
 
@@ -397,50 +429,49 @@ func (rt *Rtreed) splitNode(n *tree.Node, minGroupSize int, needToUnpin *[]unpin
 	groupTwo.SetIsleaf(n.IsLeaf())
 	groupTwo.SetLevel(n.Level())
 	groupTwo.SetEntries([]tree.Entry{entryTwo})
-	groupTwo.SetPageNum(1)
+	groupTwo.SetPageNum(newPageNum)
 
-	groupTwo, err := rt.writeNode(groupTwo)
-	if err != nil {
-		panic(err)
-	}
-	*needToUnpin = append(*needToUnpin, newUnpinPage(groupTwo.GetPageNum(), true))
-
-	entryTwoChild, err := rt.getNode(entryTwo.GetChild())
+	groupTwoUpdated, groupTwoPage, err := rt.writeNodeAndGetPage(groupTwo)
 	if err != nil {
 		panic(err)
 	}
 
-	entryOneChild, err := rt.getNode(entryOne.GetChild())
-	if err != nil {
-		panic(err)
-	}
+	rt.bufferPoolManager.UnpinPage(disk.NewBlockID(lib.PAGE_FILE_NAME, int(groupTwoUpdated.GetPageNum())), true)
 
-	*needToUnpin = append(*needToUnpin, newUnpinPage(entryTwo.GetChild(), false))
-	*needToUnpin = append(*needToUnpin, newUnpinPage(entryOne.GetChild(), false))
-	if entryTwoChild != nil {
-		entryTwoChild.SetParent(groupTwo.GetPageNum())
+	if entryTwo.GetChild() != newPageNum {
+		entryTwoChild, entryTwoChildPage, err := rt.getNodeAndPage(entryTwo.GetChild())
+		if err != nil {
+			panic(err)
+		}
+		entryTwoChild.SetParent(groupTwoUpdated.GetPageNum())
+
+		entryTwoChildPage.SerializeNode(entryTwoChild)
+		*needToUnpin = append(*needToUnpin, newUnpinPage(entryTwo.GetChild(), true))
+
 	}
-	if entryOneChild != nil {
+	if entryOne.GetChild() != newPageNum {
+		entryOneChild, entryOneChildPage, err := rt.getNodeAndPage(entryOne.GetChild())
+		if err != nil {
+			panic(err)
+		}
 		entryOneChild.SetParent(groupOne.GetPageNum())
-	}
 
-	rt.writeNode(entryTwoChild)
-	rt.writeNode(entryOneChild)
-	*needToUnpin = append(*needToUnpin, newUnpinPage(entryTwo.GetChild(), true))
-	*needToUnpin = append(*needToUnpin, newUnpinPage(entryOne.GetChild(), true))
+		entryOneChildPage.SerializeNode(entryOneChild)
+		*needToUnpin = append(*needToUnpin, newUnpinPage(entryOne.GetChild(), true))
+	}
 
 	for len(otherEntries) > 0 {
-		next := pickNext(groupOne, groupTwo, otherEntries)
+		next := pickNext(groupOne, groupTwoUpdated, otherEntries)
 		e := otherEntries[next]
 
 		if len(otherEntries)+len(groupOne.GetEntries()) <= minGroupSize {
 			rt.assignEntryToGroup(e, groupOne)
-		} else if len(otherEntries)+len(groupTwo.GetEntries()) <= minGroupSize {
-			rt.assignEntryToGroup(e, groupTwo)
+		} else if len(otherEntries)+len(groupTwoUpdated.GetEntries()) <= minGroupSize {
+			rt.assignEntryToGroup(e, groupTwoUpdated)
 		} else {
 
 			gOneRect := createNodeRectangle(*groupOne)
-			gTwoRect := createNodeRectangle(*groupTwo)
+			gTwoRect := createNodeRectangle(*groupTwoUpdated)
 			gOneEntryRect := tree.CreateRectangle(gOneRect, e.GetRect())
 			gTwoEntryRect := tree.CreateRectangle(gTwoRect, e.GetRect())
 
@@ -449,34 +480,41 @@ func (rt *Rtreed) splitNode(n *tree.Node, minGroupSize int, needToUnpin *[]unpin
 			if gOneEnlargement < gTwoEnlargement {
 				rt.assignEntryToGroup(e, groupOne)
 			} else if gOneEnlargement > gTwoEnlargement {
-				rt.assignEntryToGroup(e, groupTwo)
+				rt.assignEntryToGroup(e, groupTwoUpdated)
 			} else if gOneRect.Area() < gTwoRect.Area() {
 				rt.assignEntryToGroup(e, groupOne)
 			} else if gOneRect.Area() > gTwoRect.Area() {
-				rt.assignEntryToGroup(e, groupTwo)
-			} else if len(groupOne.GetEntries()) <= len(groupTwo.GetEntries()) {
+				rt.assignEntryToGroup(e, groupTwoUpdated)
+			} else if len(groupOne.GetEntries()) <= len(groupTwoUpdated.GetEntries()) {
 				rt.assignEntryToGroup(e, groupOne)
 			} else {
-				rt.assignEntryToGroup(e, groupTwo)
+				rt.assignEntryToGroup(e, groupTwoUpdated)
 			}
 		}
 		otherEntries = append(otherEntries[:next], otherEntries[next+1:]...)
 	}
 
-	return groupOne, groupTwo
+	nPage.SerializeNode(groupOne)
+	groupTwoPage.SerializeNode(groupTwoUpdated)
+	return nPage, groupTwoPage
 }
 
 func (rt *Rtreed) assignEntryToGroup(e tree.Entry, group *tree.Node) {
-	eChild, _ := rt.getNode(e.GetChild())
-	var childPageNum types.BlockNum = 0
-	rt.bufferPoolManager.UnpinPage(disk.NewBlockID(lib.PAGE_FILE_NAME, int(e.GetChild())), false)
-	if eChild != nil {
-		eChild.SetParent(group.GetPageNum())
-		rt.writeNode(eChild)
-		childPageNum = eChild.GetPageNum()
-		rt.bufferPoolManager.UnpinPage(disk.NewBlockID(lib.PAGE_FILE_NAME, int(e.GetChild())), true)
+	if e.GetChild() != newPageNum {
+		eChild, eChildPage, _ := rt.getNodeAndPage(e.GetChild())
+		var childPageNum types.BlockNum = 0
+
+		if eChild != nil {
+			eChild.SetParent(group.GetPageNum())
+			eChildPage.SerializeNode(eChild)
+
+			childPageNum = eChild.GetPageNum()
+		}
+		rt.bufferPoolManager.UnpinPage(disk.NewBlockID(lib.PAGE_FILE_NAME, int(childPageNum)), true)
+
+		e.SetChild(childPageNum)
 	}
-	e.SetChild(childPageNum)
+
 	group.AppendEntry(e)
 }
 
